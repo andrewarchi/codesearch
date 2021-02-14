@@ -5,6 +5,7 @@
 package index
 
 import (
+	"fmt"
 	"regexp/syntax"
 	"sort"
 	"strconv"
@@ -50,13 +51,8 @@ func (q *Query) or(r *Query) *Query {
 // andOr returns the query q AND r or q OR r, possibly reusing q's and r's storage.
 // It works hard to avoid creating unnecessarily complicated structures.
 func (q *Query) andOr(r *Query, op QueryOp) (out *Query) {
-	opstr := "&"
-	if op == QOr {
-		opstr = "|"
-	}
-	//println("andOr", q.String(), opstr, r.String())
-	//defer func() { println("  ->", out.String()) }()
-	_ = opstr
+	// fmt.Println("andOr", q, op, r)
+	// defer func() { fmt.Println("  ->", out) }()
 
 	if len(q.Trigram) == 0 && len(q.Sub) == 1 {
 		q = q.Sub[0]
@@ -69,14 +65,14 @@ func (q *Query) andOr(r *Query, op QueryOp) (out *Query) {
 	// If q ⇒ r, q AND r ≡ q.
 	// If q ⇒ r, q OR r ≡ r.
 	if q.implies(r) {
-		//println(q.String(), "implies", r.String())
+		// fmt.Println(q, "implies", r)
 		if op == QAnd {
 			return q
 		}
 		return r
 	}
 	if r.implies(q) {
-		//println(r.String(), "implies", q.String())
+		// fmt.Println(r, "implies", q)
 		if op == QAnd {
 			return r
 		}
@@ -231,7 +227,7 @@ func (q *Query) maybeRewrite(op QueryOp) {
 		return
 	}
 
-	// AND/OR doing real work?  Can't rewrite.
+	// AND/OR doing real work? Can't rewrite.
 	n := len(q.Sub) + len(q.Trigram)
 	if n > 1 {
 		return
@@ -265,7 +261,7 @@ func (q *Query) andTrigrams(t stringSet) *Query {
 		return q
 	}
 
-	//println("andtrigrams", strings.Join(t, ","))
+	// fmt.Println("andtrigrams", strings.Join(t, ","))
 	or := noneQuery
 	for _, tt := range t {
 		var trig stringSet
@@ -273,16 +269,31 @@ func (q *Query) andTrigrams(t stringSet) *Query {
 			trig.add(tt[i : i+3])
 		}
 		trig.clean(false)
-		//println(tt, "trig", strings.Join(trig, ","))
+		// fmt.Println(tt, "trig", strings.Join(trig, ","))
 		or = or.or(&Query{Op: QAnd, Trigram: trig})
 	}
 	q = q.and(or)
 	return q
 }
 
+func (op QueryOp) String() string {
+	switch op {
+	case QAll:
+		return "+"
+	case QNone:
+		return "-"
+	case QAnd:
+		return "&"
+	case QOr:
+		return "|"
+	default:
+		return fmt.Sprintf("op(%d)", int(op))
+	}
+}
+
 func (q *Query) String() string {
 	if q == nil {
-		return "?"
+		return "<nil>"
 	}
 	if q.Op == QNone {
 		return "-"
@@ -417,9 +428,10 @@ func emptyString() regexpInfo {
 }
 
 // analyze returns the regexpInfo for the regexp re.
-func analyze(re *syntax.Regexp) (ret regexpInfo) {
-	//println("analyze", re.String())
-	//defer func() { println("->", ret.String()) }()
+func analyze(re *syntax.Regexp) (out regexpInfo) {
+	// fmt.Println("analyze", re)
+	// defer func() { fmt.Println("->", out) }()
+
 	var info regexpInfo
 	switch re.Op {
 	case syntax.OpNoMatch:
@@ -556,8 +568,9 @@ func fold(f func(x, y regexpInfo) regexpInfo, sub []*syntax.Regexp, zero regexpI
 
 // concat returns the regexp info for xy given x and y.
 func concat(x, y regexpInfo) (out regexpInfo) {
-	//println("concat", x.String(), "...", y.String())
-	//defer func() { println("->", out.String()) }()
+	// fmt.Println("concat", x, "...", y)
+	// defer func() { fmt.Println("->", out) }()
+
 	var xy regexpInfo
 	xy.match = x.match.and(y.match)
 	if x.exact.have() && y.exact.have() {
@@ -598,8 +611,9 @@ func concat(x, y regexpInfo) (out regexpInfo) {
 
 // alternate returns the regexpInfo for x|y given x and y.
 func alternate(x, y regexpInfo) (out regexpInfo) {
-	//println("alternate", x.String(), "...", y.String())
-	//defer func() { println("->", out.String()) }()
+	// fmt.Println("alternate", x, "...", y)
+	// defer func() { fmt.Println("->", out) }()
+
 	var xy regexpInfo
 	if x.exact.have() && y.exact.have() {
 		xy.exact = x.exact.union(y.exact, false)
@@ -631,8 +645,9 @@ func (info *regexpInfo) addExact() {
 
 // simplify simplifies the regexpInfo when the exact set gets too large.
 func (info *regexpInfo) simplify(force bool) {
-	//println("  simplify", info.String(), " force=", force)
-	//defer func() { println("  ->", info.String()) }()
+	// fmt.Println("  simplify", info, " force=", force)
+	// defer func() { fmt.Println("  ->", info) }()
+
 	// If there are now too many exact strings,
 	// loop over them, adding trigrams and moving
 	// the relevant pieces into prefix and suffix.
