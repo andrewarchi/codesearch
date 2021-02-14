@@ -2,30 +2,66 @@
 
 # This script builds the code search binaries for a variety of OS/architecture combinations.
 
-. ./setup
+set -e
 
-for i in {5,6,8}{c,g,a,l}
-do
-	go tool dist install cmd/$i
-done
-
-build() {
-	echo "# $1"
-	goos=$(echo $1 | sed 's;/.*;;')
-	goarch=$(echo $1 | sed 's;.*/;;')
-	GOOS=$goos GOARCH=$goarch CGO_ENABLED=0 \
-		go install -a code.google.com/p/codesearch/cmd/{cgrep,cindex,csearch}
-	rm -rf codesearch-$version
-	mkdir codesearch-$version
-	mv ~/g/bin/{cgrep,cindex,csearch}* codesearch-$version
-	chmod +x codesearch-$version/*
-	cat README.template | sed "s/ARCH/$(arch $goarch)/; s/OPERSYS/$(os $goos)/" >codesearch-$version/README.txt
-	rm -f codesearch-$version-$goos-$goarch.zip
-	zip -z -r codesearch-$version-$goos-$goarch.zip codesearch-$version < codesearch-$version/README.txt
-	rm -rf codesearch-0.01
+pretty_os() {
+	case "$1" in
+	aix)       echo AIX;;
+	android)   echo Android;;
+	darwin)    echo macOS;;
+	dragonfly) echo Dragonfly;;
+	freebsd)   echo FreeBSD;;
+	illumos)   echo Illumos;;
+	js)        echo JavaScript;;
+	linux)     echo Linux;;
+	netbsd)    echo NetBSD;;
+	openbsd)   echo OpenBSD;;
+	plan9)     echo Plan 9;;
+	solaris)   echo Solaris;;
+	windows)   echo Windows;;
+	*)         echo $1;;
+	esac
 }
 
-for i in {linux,darwin,freebsd,windows}/{amd64,386}
-do
-	build $i
+pretty_arch() {
+	case "$1" in
+	386)      echo 32-bit x86;;
+	amd64)    echo 64-bit x86;;
+	arm)      echo 32-bit ARM;;
+	arm64)    echo 64-bit ARM;;
+	mips)     echo 32-bit MIPS;;
+	mips64)   echo 64-bit MIPS;;
+	mips64le) echo 32-bit little-endian MIPS;;
+	mipsle)   echo 64-bit little-endian MIPS;;
+	ppc64)    echo 64-bit PowerPC;;
+	ppc64le)  echo 64-bit little-endian PowerPC;;
+	riscv64)  echo 64-bit RISC-V;;
+	s390x)    echo 64-bit System/390;;
+	wasm)     echo WebAssembly;;
+	*)        echo $1;;
+	esac
+}
+
+libdir="$(dirname "$(realpath "$0")")"
+version="$(git describe --tags)"
+
+build() {
+	echo "# Building $1"
+	goos=${1%%/*}
+	goarch=${1##*/}
+	out="bin/codesearch-$version-$goos-$goarch"
+
+	mkdir -p "$out"
+	GOOS=$goos GOARCH=$goarch CGO_ENABLED=0 \
+		go build -o "$out" github.com/andrewarchi/codesearch/cmd/{cgrep,cindex,csearch}
+	sed "s/GOARCH/$(pretty_arch "$goarch")/; s/GOOS/$(pretty_os "$goos")/" "$libdir"/README.template > "$out"/README.txt
+	rm -f "$out.zip"
+	zip -zrq "$out.zip" "$out" < "$out/README.txt"
+	rm -rf "$out"
+}
+
+# All GOOS/GOARCH combinations can be listed with `go tool dist list`.
+
+for goos_arch in {linux,freebsd,windows}/{amd64,386} darwin/amd64; do
+	build $goos_arch
 done

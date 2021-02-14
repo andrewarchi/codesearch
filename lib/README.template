@@ -1,7 +1,7 @@
 These are the command-line Code Search tools from
 https://github.com/andrewarchi/codesearch.
 
-These binaries are for ARCH systems running OPERSYS.
+These binaries are for GOARCH systems running GOOS.
 
 To get started, run cindex with a list of directories to index:
 

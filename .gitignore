@@ -1,0 +1,5 @@
+/bin
+/cmd/cgrep/cgrep
+/cmd/cindex/cindex
+/cmd/csearch/csearch
+*.exe
