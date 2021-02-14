@@ -5,7 +5,7 @@ These binaries are for GOARCH systems running GOOS.
 
 To get started, run cindex with a list of directories to index:
 
-	cindex /usr/include $HOME/src
+	cindex /usr/include ~/src
 
 Then run csearch to run grep over all the indexed sources:
 

@@ -37,7 +37,7 @@ If no index exists, this command creates one. If an index already exists, cindex
 overwrites it. Run cindex -help for more.
 
 csearch uses the index stored in $CSEARCHINDEX or, if that variable is unset or
-empty, $HOME/.csearchindex.
+empty, ~/.csearchindex.
 `
 
 func usage() {

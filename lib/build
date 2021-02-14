@@ -51,10 +51,10 @@ goos=${1%%/*}
 goarch=${1##*/}
 out="codesearch-$version-$goos-$goarch"
 
-mkdir -p bin "$out"
+mkdir -p build "$out"
 GOOS=$goos GOARCH=$goarch CGO_ENABLED=0 \
 	go build -o "$out" github.com/andrewarchi/codesearch/cmd/{cgrep,cindex,csearch}
 sed "s/GOARCH/$(pretty_arch "$goarch")/; s/GOOS/$(pretty_os "$goos")/" "$libdir"/README.template > "$out"/README.txt
-rm -f "bin/$out.zip"
-zip -zrq "bin/$out.zip" "$out" < "$out/README.txt"
+rm -f "build/$out.zip"
+zip -zrq "build/$out.zip" "$out" < "$out/README.txt"
 rm -rf "$out"

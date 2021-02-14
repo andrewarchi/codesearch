@@ -19,7 +19,7 @@ import (
 var usageMessage = `usage: cindex [-list] [-reset] [path...]
 
 cindex prepares the trigram index for use by csearch. The index is the
-file named by $CSEARCHINDEX, or else $HOME/.csearchindex.
+file named by $CSEARCHINDEX, or else ~/.csearchindex.
 
 The simplest invocation is
 
@@ -28,11 +28,11 @@ The simplest invocation is
 which adds the file or directory tree named by each path to the index.
 For example:
 
-	cindex $HOME/src /usr/include
+	cindex ~/src /usr/include
 
 or, equivalently:
 
-	cindex $HOME/src
+	cindex ~/src
 	cindex /usr/include
 
 If cindex is invoked with no paths, it reindexes the paths that have
@@ -157,6 +157,7 @@ func main() {
 				log.Printf("%s: %s", path, err)
 				return nil
 			}
+			// Avoid symlinks.
 			if info != nil && info.Mode()&os.ModeType == 0 {
 				return ix.AddFile(path)
 			}
