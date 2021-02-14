@@ -166,13 +166,13 @@ func (ix *Writer) Add(name string, f io.Reader) error {
 		}
 		if n > maxFileLen {
 			if ix.LogSkip {
-				log.Printf("%s: file too long (%d bytes), ignoring\n", name, n)
+				log.Printf("%s: file too long (over %d bytes), ignoring\n", name, maxFileLen)
 			}
 			return nil
 		}
 		if lineLen++; lineLen > maxLineLen {
 			if ix.LogSkip {
-				log.Printf("%s:%d: line too long (%d bytes), ignoring\n", name, lineNum, lineLen)
+				log.Printf("%s:%d: line too long (over %d bytes), ignoring\n", name, lineNum, maxLineLen)
 			}
 			return nil
 		}

@@ -117,8 +117,7 @@ func main() {
 		a, err := filepath.Abs(arg)
 		if err != nil {
 			log.Printf("%s: %s", arg, err)
-			args[i] = ""
-			continue
+			a = ""
 		}
 		args[i] = a
 	}
@@ -151,30 +150,26 @@ func main() {
 	for _, arg := range args {
 		log.Printf("index %s", arg)
 		err := filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
-			if base := filepath.Base(path); base != "" {
-				// Skip various temporary or "hidden" files or directories.
-				if base[0] == '.' || base[0] == '#' || base[0] == '~' || base[len(base)-1] == '~' {
-					if info.IsDir() {
-						return filepath.SkipDir
-					}
-					return nil
+			if defaultSkip(path) {
+				if info.IsDir() {
+					return filepath.SkipDir
 				}
+				return nil
 			}
 			if err != nil {
 				log.Printf("%s: %s", path, err)
 				return nil
 			}
 			// Avoid symlinks.
-			if info != nil && info.Mode()&os.ModeType == 0 {
-				if err := ix.AddFile(path); err != nil {
-					if os.IsPermission(err) {
-						log.Printf("%s: %s", path, err)
-						return nil
-					}
-					return err
-				}
+			if info == nil || info.Mode()&os.ModeType != 0 {
+				return nil
 			}
-			return nil
+			err = ix.AddFile(path)
+			if os.IsPermission(err) {
+				log.Printf("%s: %s", path, err)
+				return nil
+			}
+			return err
 		})
 		if err != nil {
 			log.Fatal(err)
@@ -195,4 +190,12 @@ func main() {
 	}
 	log.Printf("done")
 	return
+}
+
+func defaultSkip(path string) bool {
+	if base := filepath.Base(path); base != "" {
+		// Skip various temporary or "hidden" files or directories.
+		return base[0] == '.' || base[0] == '#' || base[0] == '~' || base[len(base)-1] == '~'
+	}
+	return false
 }

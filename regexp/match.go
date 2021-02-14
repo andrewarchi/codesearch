@@ -278,14 +278,14 @@ func (m *matcher) cache(z *nstate) *dstate {
 }
 
 func (m *matcher) match(b []byte, beginText, endText bool) (end int) {
-	//	fmt.Printf("%v\n", m.prog)
+	// fmt.Printf("%v\n", m.prog)
 
 	d := m.startLine
 	if beginText {
 		d = m.start
 	}
-	//	m.z1.dec(d.enc)
-	//	fmt.Printf("%v (%v)\n", &m.z1, d==&dmatch)
+	// m.z1.dec(d.enc)
+	// fmt.Printf("%v (%v)\n", &m.z1, d==&dmatch)
 	for i, c := range b {
 		d1 := d.next[c]
 		if d1 == nil {
@@ -300,8 +300,8 @@ func (m *matcher) match(b []byte, beginText, endText bool) (end int) {
 			d.next[c] = d1
 		}
 		d = d1
-		//		m.z1.dec(d.enc)
-		//		fmt.Printf("%#U: %v (%v, %v, %v)\n", c, &m.z1, d==&dmatch, d.matchNL, d.matchEOT)
+		// m.z1.dec(d.enc)
+		// fmt.Printf("%#U: %v (%v, %v, %v)\n", c, &m.z1, d==&dmatch, d.matchNL, d.matchEOT)
 	}
 	if d.matchNL || endText && d.matchEOT {
 		return len(b)
