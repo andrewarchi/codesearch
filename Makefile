@@ -6,8 +6,28 @@ native:
 	@mkdir -p bin
 	go build -o bin/ github.com/andrewarchi/codesearch/cmd/{cgrep,cindex,csearch}
 
-.PHONY: all
-all: $(TARGETS)
+.PHONY: release
+release: $(TARGETS)
 
 %:
 	lib/build $@
+
+.PHONY: test
+test:
+	go test ./...
+
+.PHONY: lint
+lint:
+	golint ./...
+
+.PHONY: vet
+vet:
+	go vet ./...
+
+.PHONY: install
+install:
+	go install ./...
+
+.PHONY: clean
+clean:
+	rm -rf bin
