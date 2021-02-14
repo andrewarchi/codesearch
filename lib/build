@@ -4,6 +4,8 @@
 
 set -e
 
+# All GOOS/GOARCH combinations can be listed with `go tool dist list`.
+
 pretty_os() {
 	case "$1" in
 	aix)       echo AIX;;
@@ -45,23 +47,14 @@ pretty_arch() {
 libdir="$(dirname "$(realpath "$0")")"
 version="$(git describe --tags)"
 
-build() {
-	echo "# Building $1"
-	goos=${1%%/*}
-	goarch=${1##*/}
-	out="bin/codesearch-$version-$goos-$goarch"
+goos=${1%%/*}
+goarch=${1##*/}
+out="codesearch-$version-$goos-$goarch"
 
-	mkdir -p "$out"
-	GOOS=$goos GOARCH=$goarch CGO_ENABLED=0 \
-		go build -o "$out" github.com/andrewarchi/codesearch/cmd/{cgrep,cindex,csearch}
-	sed "s/GOARCH/$(pretty_arch "$goarch")/; s/GOOS/$(pretty_os "$goos")/" "$libdir"/README.template > "$out"/README.txt
-	rm -f "$out.zip"
-	zip -zrq "$out.zip" "$out" < "$out/README.txt"
-	rm -rf "$out"
-}
-
-# All GOOS/GOARCH combinations can be listed with `go tool dist list`.
-
-for goos_arch in {linux,freebsd,windows}/{amd64,386} darwin/amd64; do
-	build $goos_arch
-done
+mkdir -p bin "$out"
+GOOS=$goos GOARCH=$goarch CGO_ENABLED=0 \
+	go build -o "$out" github.com/andrewarchi/codesearch/cmd/{cgrep,cindex,csearch}
+sed "s/GOARCH/$(pretty_arch "$goarch")/; s/GOOS/$(pretty_os "$goos")/" "$libdir"/README.template > "$out"/README.txt
+rm -f "bin/$out.zip"
+zip -zrq "bin/$out.zip" "$out" < "$out/README.txt"
+rm -rf "$out"
