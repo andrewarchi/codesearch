@@ -17,17 +17,17 @@ import (
 
 var usageMessage = `usage: csearch [-c] [-f fileregexp] [-h] [-i] [-l] [-n] regexp
 
-Csearch behaves like grep over all indexed files, searching for regexp,
+csearch behaves like grep over all indexed files, searching for regexp,
 an RE2 (nearly PCRE) regular expression.
 
 The -c, -h, -i, -l, and -n flags are as in grep, although note that as per Go's
-flag parsing convention, they cannot be combined: the option pair -i -n 
+flag parsing convention, they cannot be combined: the option pair -i -n
 cannot be abbreviated to -in.
 
 The -f flag restricts the search to files whose names match the RE2 regular
 expression fileregexp.
 
-Csearch relies on the existence of an up-to-date index created ahead of time.
+csearch relies on the existence of an up-to-date index created ahead of time.
 To build or rebuild the index that csearch uses, run:
 
 	cindex path...
@@ -36,7 +36,7 @@ where path... is a list of directories or individual files to be included in the
 If no index exists, this command creates one. If an index already exists, cindex
 overwrites it. Run cindex -help for more.
 
-Csearch uses the index stored in $CSEARCHINDEX or, if that variable is unset or
+csearch uses the index stored in $CSEARCHINDEX or, if that variable is unset or
 empty, $HOME/.csearchindex.
 `
 
@@ -51,11 +51,9 @@ var (
 	verboseFlag = flag.Bool("verbose", false, "print extra information")
 	bruteFlag   = flag.Bool("brute", false, "brute force - search all files in index")
 	cpuProfile  = flag.String("cpuprofile", "", "write cpu profile to this file")
-
-	matches bool
 )
 
-func Main() {
+func main() {
 	g := regexp.Grep{
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
@@ -100,57 +98,52 @@ func Main() {
 	if *verboseFlag {
 		log.Printf("query: %s\n", q)
 	}
+	if *bruteFlag {
+		q = &index.Query{Op: index.QAll}
+	}
 
 	ix, err := index.Open(index.File())
 	if err != nil {
 		log.Fatal(err)
 	}
 	ix.Verbose = *verboseFlag
-	var post []uint32
-	if *bruteFlag {
-		post = ix.PostingQuery(&index.Query{Op: index.QAll})
-	} else {
-		post = ix.PostingQuery(q)
+	post, err := ix.PostingQuery(q)
+	if err != nil {
+		log.Fatal(err)
 	}
 	if *verboseFlag {
 		log.Printf("post query identified %d possible files\n", len(post))
 	}
 
 	if fre != nil {
-		fnames := make([]uint32, 0, len(post))
+		filenames := make([]uint32, 0, len(post))
 
-		for _, fileid := range post {
-			name, err := ix.Name(fileid)
+		for _, fileID := range post {
+			name, err := ix.Name(fileID)
 			if err != nil {
 				log.Fatal(err)
 			}
 			if fre.MatchString(name, true, true) < 0 {
 				continue
 			}
-			fnames = append(fnames, fileid)
+			filenames = append(filenames, fileID)
 		}
 
 		if *verboseFlag {
-			log.Printf("filename regexp matched %d files\n", len(fnames))
+			log.Printf("filename regexp matched %d files\n", len(filenames))
 		}
-		post = fnames
+		post = filenames
 	}
 
-	for _, fileid := range post {
-		name, err := ix.Name(fileid)
+	for _, fileID := range post {
+		name, err := ix.Name(fileID)
 		if err != nil {
 			log.Fatal(err)
 		}
 		g.File(name)
 	}
 
-	matches = g.Match
-}
-
-func main() {
-	Main()
-	if !matches {
+	if !g.Match {
 		os.Exit(1)
 	}
-	os.Exit(0)
 }

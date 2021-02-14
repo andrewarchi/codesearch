@@ -8,7 +8,7 @@ package index
 //
 // To merge two indexes A and B (newer) into a combined index C:
 //
-// Load the path list from B and determine for each path the docid ranges
+// Load the path list from B and determine for each path the docID ranges
 // that it will replace in A.
 //
 // Read A's and B's name lists together, merging them into C's name list.
@@ -24,7 +24,7 @@ package index
 // Also during the merge, write the name index to a temporary file as usual.
 //
 // Now merge the posting lists (this is why they begin with the trigram).
-// During the merge, translate the docid numbers to the new C docid space.
+// During the merge, translate the docID numbers to the new C docID space.
 // Also during the merge, write the posting list index to a temporary file as usual.
 //
 // Copy the name index and posting list index into C's index and write the trailer.
@@ -36,8 +36,8 @@ import (
 	"strings"
 )
 
-// An idrange records that the half-open interval [lo, hi) maps to [new, new+hi-lo).
-type idrange struct {
+// An idRange records that the half-open interval [lo, hi) maps to [new, new+hi-lo).
+type idRange struct {
 	lo, hi, new uint32
 }
 
@@ -68,9 +68,9 @@ func Merge(dst, src1, src2 string) error {
 		return err
 	}
 
-	// Build docid maps.
+	// Build docID maps.
 	var i1, i2, new uint32
-	var map1, map2 []idrange
+	var map1, map2 []idRange
 	for _, path := range paths2 {
 		// Determine range shadowed by this path.
 		old := i1
@@ -100,7 +100,7 @@ func Merge(dst, src1, src2 string) error {
 
 		// Record range before the shadow.
 		if old < lo {
-			map1 = append(map1, idrange{old, lo, new})
+			map1 = append(map1, idRange{old, lo, new})
 			new += lo - old
 		}
 
@@ -129,13 +129,13 @@ func Merge(dst, src1, src2 string) error {
 		}
 		hi = i2
 		if lo < hi {
-			map2 = append(map2, idrange{lo, hi, new})
+			map2 = append(map2, idRange{lo, hi, new})
 			new += hi - lo
 		}
 	}
 
 	if i1 < uint32(ix1.numName) {
-		map1 = append(map1, idrange{i1, uint32(ix1.numName), new})
+		map1 = append(map1, idRange{i1, uint32(ix1.numName), new})
 		new += uint32(ix1.numName) - i1
 	}
 	if i2 < uint32(ix2.numName) {
@@ -172,11 +172,11 @@ func Merge(dst, src1, src2 string) error {
 		if err := ix3.writeString(p); err != nil {
 			return err
 		}
-		if err := ix3.writeString("\x00"); err != nil {
+		if err := ix3.writeByte('\x00'); err != nil {
 			return err
 		}
 	}
-	if err := ix3.writeString("\x00"); err != nil {
+	if err := ix3.writeByte('\x00'); err != nil {
 		return err
 	}
 
@@ -202,7 +202,7 @@ func Merge(dst, src1, src2 string) error {
 				if err := ix3.writeString(name); err != nil {
 					return err
 				}
-				if err := ix3.writeString("\x00"); err != nil {
+				if err := ix3.writeByte('\x00'); err != nil {
 					return err
 				}
 				new++
@@ -220,7 +220,7 @@ func Merge(dst, src1, src2 string) error {
 				if err := ix3.writeString(name); err != nil {
 					return err
 				}
-				if err := ix3.writeString("\x00"); err != nil {
+				if err := ix3.writeByte('\x00'); err != nil {
 					return err
 				}
 				new++
@@ -255,14 +255,14 @@ func Merge(dst, src1, src2 string) error {
 		if r1.trigram < r2.trigram {
 			w.trigram(r1.trigram)
 			for {
-				ok, err := r1.nextId()
+				ok, err := r1.nextID()
 				if err != nil {
 					return err
 				}
 				if !ok {
 					break
 				}
-				if err := w.fileid(r1.fileid); err != nil {
+				if err := w.fileID(r1.fileID); err != nil {
 					return err
 				}
 			}
@@ -271,14 +271,14 @@ func Merge(dst, src1, src2 string) error {
 		} else if r2.trigram < r1.trigram {
 			w.trigram(r2.trigram)
 			for {
-				ok, err := r2.nextId()
+				ok, err := r2.nextID()
 				if err != nil {
 					return err
 				}
 				if !ok {
 					break
 				}
-				if err := w.fileid(r2.fileid); err != nil {
+				if err := w.fileID(r2.fileID); err != nil {
 					return err
 				}
 			}
@@ -289,19 +289,19 @@ func Merge(dst, src1, src2 string) error {
 				break
 			}
 			w.trigram(r1.trigram)
-			r1.nextId()
-			r2.nextId()
-			for r1.fileid < ^uint32(0) || r2.fileid < ^uint32(0) {
-				if r1.fileid < r2.fileid {
-					if err := w.fileid(r1.fileid); err != nil {
+			r1.nextID()
+			r2.nextID()
+			for r1.fileID < ^uint32(0) || r2.fileID < ^uint32(0) {
+				if r1.fileID < r2.fileID {
+					if err := w.fileID(r1.fileID); err != nil {
 						return err
 					}
-					r1.nextId()
-				} else if r2.fileid < r1.fileid {
-					if err := w.fileid(r2.fileid); err != nil {
+					r1.nextID()
+				} else if r2.fileID < r1.fileID {
+					if err := w.fileID(r2.fileID); err != nil {
 						return err
 					}
-					r2.nextId()
+					r2.nextID()
 				} else {
 					panic("merge: inconsistent index")
 				}
@@ -355,20 +355,20 @@ func Merge(dst, src1, src2 string) error {
 
 type postMapReader struct {
 	ix      *Index
-	idmap   []idrange
+	idMap   []idRange
 	triNum  uint32
 	trigram uint32
 	count   uint32
 	offset  uint32
 	d       []byte
-	oldid   uint32
-	fileid  uint32
+	oldID   uint32
+	fileID  uint32
 	i       int
 }
 
-func (r *postMapReader) init(ix *Index, idmap []idrange) error {
+func (r *postMapReader) init(ix *Index, idMap []idRange) error {
 	r.ix = ix
-	r.idmap = idmap
+	r.idMap = idMap
 	r.trigram = ^uint32(0)
 	return r.load()
 }
@@ -382,7 +382,7 @@ func (r *postMapReader) load() error {
 	if r.triNum >= uint32(r.ix.numPost) {
 		r.trigram = ^uint32(0)
 		r.count = 0
-		r.fileid = ^uint32(0)
+		r.fileID = ^uint32(0)
 		return nil
 	}
 	var err error
@@ -391,16 +391,16 @@ func (r *postMapReader) load() error {
 		return err
 	}
 	if r.count == 0 {
-		r.fileid = ^uint32(0)
+		r.fileID = ^uint32(0)
 		return nil
 	}
 	r.d, err = r.ix.slice(r.ix.postData+r.offset+3, -1)
-	r.oldid = ^uint32(0)
+	r.oldID = ^uint32(0)
 	r.i = 0
 	return err
 }
 
-func (r *postMapReader) nextId() (bool, error) {
+func (r *postMapReader) nextID() (bool, error) {
 	for r.count > 0 {
 		r.count--
 		delta64, n := binary.Uvarint(r.d)
@@ -409,22 +409,22 @@ func (r *postMapReader) nextId() (bool, error) {
 			return false, corrupt()
 		}
 		r.d = r.d[n:]
-		r.oldid += delta
-		for r.i < len(r.idmap) && r.idmap[r.i].hi <= r.oldid {
+		r.oldID += delta
+		for r.i < len(r.idMap) && r.idMap[r.i].hi <= r.oldID {
 			r.i++
 		}
-		if r.i >= len(r.idmap) {
+		if r.i >= len(r.idMap) {
 			r.count = 0
 			break
 		}
-		if r.oldid < r.idmap[r.i].lo {
+		if r.oldID < r.idMap[r.i].lo {
 			continue
 		}
-		r.fileid = r.idmap[r.i].new + r.oldid - r.idmap[r.i].lo
+		r.fileID = r.idMap[r.i].new + r.oldID - r.idMap[r.i].lo
 		return true, nil
 	}
 
-	r.fileid = ^uint32(0)
+	r.fileID = ^uint32(0)
 	return false, nil
 }
 
@@ -456,7 +456,7 @@ func (w *postDataWriter) trigram(t uint32) {
 	w.last = ^uint32(0)
 }
 
-func (w *postDataWriter) fileid(id uint32) error {
+func (w *postDataWriter) fileID(id uint32) error {
 	if w.count == 0 {
 		if err := w.out.writeTrigram(w.t); err != nil {
 			return err

@@ -178,9 +178,9 @@ func (ix *Index) Paths() ([]string, error) {
 	return x, nil
 }
 
-// NameBytes returns the name corresponding to the given fileid.
-func (ix *Index) NameBytes(fileid uint32) ([]byte, error) {
-	off, err := ix.uint32(ix.nameIndex + 4*fileid)
+// NameBytes returns the name corresponding to the given file ID.
+func (ix *Index) NameBytes(fileID uint32) ([]byte, error) {
+	off, err := ix.uint32(ix.nameIndex + 4*fileID)
 	if err != nil {
 		return nil, err
 	}
@@ -199,9 +199,9 @@ func (ix *Index) str(off uint32) ([]byte, error) {
 	return str[:i], nil
 }
 
-// Name returns the name corresponding to the given fileid.
-func (ix *Index) Name(fileid uint32) (string, error) {
-	name, err := ix.NameBytes(fileid)
+// Name returns the name corresponding to the given file ID.
+func (ix *Index) Name(fileID uint32) (string, error) {
+	name, err := ix.NameBytes(fileID)
 	if err != nil {
 		return "", err
 	}
@@ -263,7 +263,7 @@ type postReader struct {
 	ix       *Index
 	count    int
 	offset   uint32
-	fileid   uint32
+	fileID   uint32
 	d        []byte
 	restrict []uint32
 }
@@ -280,7 +280,7 @@ func (r *postReader) init(ix *Index, trigram uint32, restrict []uint32) error {
 	r.ix = ix
 	r.count = count
 	r.offset = offset
-	r.fileid = ^uint32(0)
+	r.fileID = ^uint32(0)
 	r.d = d
 	r.restrict = restrict
 	return nil
@@ -299,14 +299,14 @@ func (r *postReader) next() (bool, error) {
 			return false, corrupt()
 		}
 		r.d = r.d[n:]
-		r.fileid += delta
+		r.fileID += delta
 		if r.restrict != nil {
 			i := 0
-			for i < len(r.restrict) && r.restrict[i] < r.fileid {
+			for i < len(r.restrict) && r.restrict[i] < r.fileID {
 				i++
 			}
 			r.restrict = r.restrict[i:]
-			if len(r.restrict) == 0 || r.restrict[0] != r.fileid {
+			if len(r.restrict) == 0 || r.restrict[0] != r.fileID {
 				continue
 			}
 		}
@@ -316,7 +316,7 @@ func (r *postReader) next() (bool, error) {
 	if r.d != nil && (len(r.d) == 0 || r.d[0] != 0) {
 		return false, corrupt()
 	}
-	r.fileid = ^uint32(0)
+	r.fileID = ^uint32(0)
 	return false, nil
 }
 
@@ -338,7 +338,7 @@ func (ix *Index) postingList(trigram uint32, restrict []uint32) ([]uint32, error
 		if !ok {
 			break
 		}
-		x = append(x, r.fileid)
+		x = append(x, r.fileID)
 	}
 	return x, nil
 }
@@ -360,12 +360,12 @@ func (ix *Index) postingAnd(list []uint32, trigram uint32, restrict []uint32) ([
 		if !ok {
 			break
 		}
-		fileid := r.fileid
-		for i < len(list) && list[i] < fileid {
+		fileID := r.fileID
+		for i < len(list) && list[i] < fileID {
 			i++
 		}
-		if i < len(list) && list[i] == fileid {
-			x = append(x, fileid)
+		if i < len(list) && list[i] == fileID {
+			x = append(x, fileID)
 			i++
 		}
 	}
@@ -389,13 +389,13 @@ func (ix *Index) postingOr(list []uint32, trigram uint32, restrict []uint32) ([]
 		if !ok {
 			break
 		}
-		fileid := r.fileid
-		for i < len(list) && list[i] < fileid {
+		fileID := r.fileID
+		for i < len(list) && list[i] < fileID {
 			x = append(x, list[i])
 			i++
 		}
-		x = append(x, fileid)
-		if i < len(list) && list[i] == fileid {
+		x = append(x, fileID)
+		if i < len(list) && list[i] == fileID {
 			i++
 		}
 	}
@@ -407,8 +407,9 @@ func (ix *Index) PostingQuery(q *Query) ([]uint32, error) {
 	return ix.postingQuery(q, nil)
 }
 
-func (ix *Index) postingQuery(q *Query, restrict []uint32) (ret []uint32, err error) {
+func (ix *Index) postingQuery(q *Query, restrict []uint32) ([]uint32, error) {
 	var list []uint32
+	var err error
 	switch q.Op {
 	case QNone:
 		// nothing

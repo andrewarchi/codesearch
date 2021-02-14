@@ -32,8 +32,8 @@ import (
 // allow incremental updating of an existing index when a directory changes.
 // But we have not implemented that.
 
-// An IndexWriter creates an on-disk index corresponding to a set of files.
-type IndexWriter struct {
+// A Writer creates an on-disk index corresponding to a set of files.
+type Writer struct {
 	LogSkip bool // log information about skipped files
 	Verbose bool // log status using package log
 
@@ -58,9 +58,9 @@ type IndexWriter struct {
 
 const npost = 64 << 20 / 8 // 64 MB worth of post entries
 
-// Create returns a new IndexWriter that will write the index to file.
-func Create(file string) (*IndexWriter, error) {
-	w := &IndexWriter{
+// Create returns a new Writer that will write the index to file.
+func Create(file string) (*Writer, error) {
+	w := &Writer{
 		trigram: sparse.NewSet(1 << 24),
 		post:    make([]postEntry, 0, npost),
 		inbuf:   make([]byte, 16384),
@@ -88,17 +88,17 @@ func (p postEntry) trigram() uint32 {
 	return uint32(p >> 32)
 }
 
-func (p postEntry) fileid() uint32 {
+func (p postEntry) fileID() uint32 {
 	return uint32(p)
 }
 
-func makePostEntry(trigram, fileid uint32) postEntry {
-	return postEntry(trigram)<<32 | postEntry(fileid)
+func makePostEntry(trigram, fileID uint32) postEntry {
+	return postEntry(trigram)<<32 | postEntry(fileID)
 }
 
 // Tuning constants for detecting text files.
-// A file is assumed not to be text files (and thus not indexed)
-// if it contains an invalid UTF-8 sequences, if it is longer than maxFileLength
+// A file is assumed not to be a text file (and thus not indexed)
+// if it contains an invalid UTF-8 sequence, if it is longer than maxFileLength
 // bytes, if it contains a line longer than maxLineLen bytes,
 // or if it contains more than maxTextTrigrams distinct trigrams.
 const (
@@ -108,13 +108,13 @@ const (
 )
 
 // AddPaths adds the given paths to the index's list of paths.
-func (ix *IndexWriter) AddPaths(paths []string) {
+func (ix *Writer) AddPaths(paths []string) {
 	ix.paths = append(ix.paths, paths...)
 }
 
 // AddFile adds the file with the given name (opened using os.Open)
 // to the index. It logs errors using package log.
-func (ix *IndexWriter) AddFile(name string) error {
+func (ix *Writer) AddFile(name string) error {
 	f, err := os.Open(name)
 	if err != nil {
 		return err
@@ -125,7 +125,7 @@ func (ix *IndexWriter) AddFile(name string) error {
 
 // Add adds the file f to the index under the given name.
 // It logs errors using package log.
-func (ix *IndexWriter) Add(name string, f io.Reader) error {
+func (ix *Writer) Add(name string, f io.Reader) error {
 	ix.trigram.Reset()
 	var (
 		c       = byte(0)
@@ -191,7 +191,7 @@ func (ix *IndexWriter) Add(name string, f io.Reader) error {
 		log.Printf("%d %d %s\n", n, ix.trigram.Len(), name)
 	}
 
-	fileid, err := ix.addName(name)
+	fileID, err := ix.addName(name)
 	if err != nil {
 		return err
 	}
@@ -201,13 +201,13 @@ func (ix *IndexWriter) Add(name string, f io.Reader) error {
 				return err
 			}
 		}
-		ix.post = append(ix.post, makePostEntry(trigram, fileid))
+		ix.post = append(ix.post, makePostEntry(trigram, fileID))
 	}
 	return nil
 }
 
 // Flush flushes the index entry to the target file.
-func (ix *IndexWriter) Flush() error {
+func (ix *Writer) Flush() error {
 	if _, err := ix.addName(""); err != nil {
 		return err
 	}
@@ -221,11 +221,11 @@ func (ix *IndexWriter) Flush() error {
 		if err := ix.main.writeString(p); err != nil {
 			return err
 		}
-		if err := ix.main.writeString("\x00"); err != nil {
+		if err := ix.main.writeByte('\x00'); err != nil {
 			return err
 		}
 	}
-	if err := ix.main.writeString("\x00"); err != nil {
+	if err := ix.main.writeByte('\x00'); err != nil {
 		return err
 	}
 	off[1] = ix.main.offset()
@@ -281,7 +281,7 @@ func copyFile(dst, src *bufWriter) error {
 
 // addName adds the file with the given name to the index.
 // It returns the assigned file ID number.
-func (ix *IndexWriter) addName(name string) (uint32, error) {
+func (ix *Writer) addName(name string) (uint32, error) {
 	if strings.Contains(name, "\x00") {
 		return 0, fmt.Errorf("%q: file has NUL byte in name", name)
 	}
@@ -292,7 +292,7 @@ func (ix *IndexWriter) addName(name string) (uint32, error) {
 	if err := ix.nameData.writeString(name); err != nil {
 		return 0, err
 	}
-	if err := ix.nameData.writeByte(0); err != nil {
+	if err := ix.nameData.writeByte('\x00'); err != nil {
 		return 0, err
 	}
 	id := ix.numName
@@ -302,7 +302,7 @@ func (ix *IndexWriter) addName(name string) (uint32, error) {
 
 // flushPost writes ix.post to a new temporary file and
 // clears the slice.
-func (ix *IndexWriter) flushPost() error {
+func (ix *Writer) flushPost() error {
 	w, err := ioutil.TempFile("", "csearch-index")
 	if err != nil {
 		return err
@@ -330,7 +330,7 @@ func (ix *IndexWriter) flushPost() error {
 
 // mergePost reads the flushed index entries and merges them
 // into posting lists, writing the resulting lists to out.
-func (ix *IndexWriter) mergePost(out *bufWriter) error {
+func (ix *Writer) mergePost(out *bufWriter) error {
 	var h postHeap
 
 	log.Printf("merge %d files + mem", len(ix.postFile))
@@ -354,16 +354,16 @@ func (ix *IndexWriter) mergePost(out *bufWriter) error {
 		ix.buf[2] = byte(trigram)
 
 		// posting list
-		fileid := ^uint32(0)
+		fileID := ^uint32(0)
 		nfile := uint32(0)
 		if err := out.write(ix.buf[:3]); err != nil {
 			return err
 		}
 		for ; e.trigram() == trigram && trigram != 1<<24-1; e = h.next() {
-			if err := out.writeUvarint(e.fileid() - fileid); err != nil {
+			if err := out.writeUvarint(e.fileID() - fileID); err != nil {
 				return err
 			}
-			fileid = e.fileid()
+			fileID = e.fileID()
 			nfile++
 		}
 		if err := out.writeUvarint(0); err != nil {
@@ -686,7 +686,7 @@ func validUTF8(c1, c2 uint32) bool {
 }
 
 // sortPost sorts the postentry list.
-// The list is already sorted by fileid (bottom 32 bits)
+// The list is already sorted by file ID (bottom 32 bits)
 // and the top 8 bits are always zero, so there are only
 // 24 bits to sort. Run two rounds of 12-bit radix sort.
 const sortK = 12

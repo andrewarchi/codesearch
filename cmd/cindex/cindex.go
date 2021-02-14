@@ -18,7 +18,7 @@ import (
 
 var usageMessage = `usage: cindex [-list] [-reset] [path...]
 
-Cindex prepares the trigram index for use by csearch.  The index is the
+cindex prepares the trigram index for use by csearch. The index is the
 file named by $CSEARCHINDEX, or else $HOME/.csearchindex.
 
 The simplest invocation is
@@ -41,7 +41,7 @@ itself is a useful command to run in a nightly cron job.
 
 The -list flag causes cindex to list the paths it has indexed and exit.
 
-By default cindex adds the named paths to the index but preserves 
+By default cindex adds the named paths to the index but preserves
 information about other paths that might already be indexed
 (the ones printed by cindex -list). The -reset flag causes cindex to
 delete the existing index before indexing the new paths.
@@ -125,12 +125,12 @@ func main() {
 		args = args[1:]
 	}
 
-	master := index.File()
-	if _, err := os.Stat(master); err != nil {
+	primary := index.File()
+	if _, err := os.Stat(primary); err != nil {
 		// Does not exist.
 		*resetFlag = true
 	}
-	file := master
+	file := primary
 	if !*resetFlag {
 		file += "~"
 	}
@@ -143,7 +143,7 @@ func main() {
 	ix.AddPaths(args)
 	for _, arg := range args {
 		log.Printf("index %s", arg)
-		filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
 			if _, elem := filepath.Split(path); elem != "" {
 				// Skip various temporary or "hidden" files or directories.
 				if elem[0] == '.' || elem[0] == '#' || elem[0] == '~' || elem[len(elem)-1] == '~' {
@@ -158,10 +158,13 @@ func main() {
 				return nil
 			}
 			if info != nil && info.Mode()&os.ModeType == 0 {
-				ix.AddFile(path)
+				return ix.AddFile(path)
 			}
 			return nil
 		})
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	log.Printf("flush index")
 	if err := ix.Flush(); err != nil {
@@ -169,12 +172,12 @@ func main() {
 	}
 
 	if !*resetFlag {
-		log.Printf("merge %s %s", master, file)
-		if err := index.Merge(file+"~", master, file); err != nil {
+		log.Printf("merge %s %s", primary, file)
+		if err := index.Merge(file+"~", primary, file); err != nil {
 			log.Fatal(err)
 		}
 		os.Remove(file)
-		os.Rename(file+"~", master)
+		os.Rename(file+"~", primary)
 	}
 	log.Printf("done")
 	return
