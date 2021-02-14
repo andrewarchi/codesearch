@@ -16,10 +16,11 @@ import (
 	"github.com/andrewarchi/codesearch/index"
 )
 
-var usageMessage = `usage: cindex [-list] [-reset] [path...]
+var usageMessage = `usage: cindex [-list] [-reset] [-index path] [path...]
 
 cindex prepares the trigram index for use by csearch. The index is the
-file named by $CSEARCHINDEX, or else ~/.csearchindex.
+file named by the -index flag or $CSEARCHINDEX variable. If both are
+empty, the index path defaults to ~/.csearchindex.
 
 The simplest invocation is
 
@@ -56,6 +57,8 @@ func usage() {
 var (
 	listFlag    = flag.Bool("list", false, "list indexed paths and exit")
 	resetFlag   = flag.Bool("reset", false, "discard existing index")
+	indexFlag   = flag.String("index", "", "path to the index")
+	logSkipFlag = flag.Bool("logskip", false, "log skipped files")
 	verboseFlag = flag.Bool("verbose", false, "print extra information")
 	cpuProfile  = flag.String("cpuprofile", "", "write cpu profile to this file")
 )
@@ -125,7 +128,10 @@ func main() {
 		args = args[1:]
 	}
 
-	primary := index.File()
+	primary := *indexFlag
+	if primary == "" {
+		primary = index.File()
+	}
 	if _, err := os.Stat(primary); err != nil {
 		// Does not exist.
 		*resetFlag = true
@@ -139,6 +145,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	ix.LogSkip = *logSkipFlag || *verboseFlag
 	ix.Verbose = *verboseFlag
 	ix.AddPaths(args)
 	for _, arg := range args {

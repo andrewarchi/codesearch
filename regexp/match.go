@@ -358,6 +358,7 @@ type Grep struct {
 	C bool // C flag - print count of matches
 	N bool // N flag - print line numbers
 	H bool // H flag - do not print file names
+	Z bool // Z flag - delimit file names with NUL instead of LF
 
 	Match bool
 
@@ -369,6 +370,7 @@ func (g *Grep) AddFlags() {
 	flag.BoolVar(&g.C, "c", false, "print match counts only")
 	flag.BoolVar(&g.N, "n", false, "show line numbers")
 	flag.BoolVar(&g.H, "h", false, "omit file names")
+	flag.BoolVar(&g.Z, "0", false, "null delimit file names")
 }
 
 func (g *Grep) File(name string) {
@@ -433,7 +435,11 @@ func (g *Grep) Reader(r io.Reader, name string) {
 			}
 			g.Match = true
 			if g.L {
-				fmt.Fprintln(g.Stdout, name)
+				if g.Z {
+					fmt.Fprintf(g.Stdout, "%s\x00", name)
+				} else {
+					fmt.Fprintf(g.Stdout, "%s\n", name)
+				}
 				return
 			}
 			lineStart := bytes.LastIndex(buf[chunkStart:m1], nl) + 1 + chunkStart

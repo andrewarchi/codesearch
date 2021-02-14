@@ -133,7 +133,8 @@ func (ix *Writer) Add(name string, f io.Reader) error {
 		buf     = ix.inbuf[:0]
 		tv      = uint32(0)
 		n       = int64(0)
-		linelen = 0
+		lineLen = 0
+		lineNum = 1
 	)
 	for {
 		tv = (tv << 8) & (1<<24 - 1)
@@ -159,29 +160,30 @@ func (ix *Writer) Add(name string, f io.Reader) error {
 		}
 		if !validUTF8((tv>>8)&0xFF, tv&0xFF) {
 			if ix.LogSkip {
-				log.Printf("%s: invalid UTF-8, ignoring\n", name)
+				log.Printf("%s:%d: invalid UTF-8, ignoring\n", name, lineNum)
 			}
 			return nil
 		}
 		if n > maxFileLen {
 			if ix.LogSkip {
-				log.Printf("%s: too long, ignoring\n", name)
+				log.Printf("%s: file too long (%d bytes), ignoring\n", name, n)
 			}
 			return nil
 		}
-		if linelen++; linelen > maxLineLen {
+		if lineLen++; lineLen > maxLineLen {
 			if ix.LogSkip {
-				log.Printf("%s: very long lines, ignoring\n", name)
+				log.Printf("%s:%d: line too long (%d bytes), ignoring\n", name, lineNum, lineLen)
 			}
 			return nil
 		}
 		if c == '\n' {
-			linelen = 0
+			lineLen = 0
+			lineNum++
 		}
 	}
 	if ix.trigram.Len() > maxTextTrigrams {
 		if ix.LogSkip {
-			log.Printf("%s: too many trigrams, probably not text, ignoring\n", name)
+			log.Printf("%s: too many trigrams (%d), probably not text, ignoring\n", name, ix.trigram.Len())
 		}
 		return nil
 	}
@@ -319,7 +321,7 @@ func (ix *Writer) flushPost() error {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("codesearch/index: short write writing %s", w.Name())
+		return fmt.Errorf("short write writing %s", w.Name())
 	}
 
 	ix.post = ix.post[:0]

@@ -15,7 +15,7 @@ import (
 	"github.com/andrewarchi/codesearch/regexp"
 )
 
-var usageMessage = `usage: csearch [-c] [-f fileregexp] [-h] [-i] [-l] [-n] regexp
+var usageMessage = `usage: csearch [-c] [-f fileregexp] [-index path] [-h] [-i] [-l] [-n] regexp
 
 csearch behaves like grep over all indexed files, searching for regexp,
 an RE2 (nearly PCRE) regular expression.
@@ -36,8 +36,8 @@ where path... is a list of directories or individual files to be included in the
 If no index exists, this command creates one. If an index already exists, cindex
 overwrites it. Run cindex -help for more.
 
-csearch uses the index stored in $CSEARCHINDEX or, if that variable is unset or
-empty, ~/.csearchindex.
+csearch uses the index file named by the -index flag or $CSEARCHINDEX variable.
+If both are empty, the index path defaults to ~/.csearchindex.
 `
 
 func usage() {
@@ -48,6 +48,7 @@ func usage() {
 var (
 	fFlag       = flag.String("f", "", "search only files with names matching this regexp")
 	iFlag       = flag.Bool("i", false, "case-insensitive search")
+	indexFlag   = flag.String("index", "", "path to the index")
 	verboseFlag = flag.Bool("verbose", false, "print extra information")
 	bruteFlag   = flag.Bool("brute", false, "brute force - search all files in index")
 	cpuProfile  = flag.String("cpuprofile", "", "write cpu profile to this file")
@@ -102,7 +103,11 @@ func main() {
 		q = &index.Query{Op: index.QAll}
 	}
 
-	ix, err := index.Open(index.File())
+	indexPath := *indexFlag
+	if indexPath == "" {
+		indexPath = index.File()
+	}
+	ix, err := index.Open(indexPath)
 	if err != nil {
 		log.Fatal(err)
 	}
