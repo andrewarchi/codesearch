@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -33,8 +33,8 @@ To build or rebuild the index that csearch uses, run:
 	cindex path...
 
 where path... is a list of directories or individual files to be included in the index.
-If no index exists, this command creates one.  If an index already exists, cindex
-overwrites it.  Run cindex -help for more.
+If no index exists, this command creates one. If an index already exists, cindex
+overwrites it. Run cindex -help for more.
 
 Csearch uses the index stored in $CSEARCHINDEX or, if that variable is unset or
 empty, $HOME/.csearchindex.

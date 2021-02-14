@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -103,7 +103,7 @@ func appendFoldedRange(r []rune, lo, hi rune) []rune {
 		hi = maxFold
 	}
 
-	// Brute force.  Depend on appendRange to coalesce ranges on the fly.
+	// Brute force. Depend on appendRange to coalesce ranges on the fly.
 	for c := lo; c <= hi; c++ {
 		r = appendRange(r, c, c)
 		f := unicode.SimpleFold(c)

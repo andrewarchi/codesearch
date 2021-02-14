@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -12,9 +12,9 @@ package index
 // that it will replace in A.
 //
 // Read A's and B's name lists together, merging them into C's name list.
-// Discard the identified ranges from A during the merge.  Also during the merge,
+// Discard the identified ranges from A during the merge. Also during the merge,
 // record the mapping from A's docids to C's docids, and also the mapping from
-// B's docids to C's docids.  Both mappings can be summarized in a table like
+// B's docids to C's docids. Both mappings can be summarized in a table like
 //
 //	10-14 map to 20-24
 //	15-24 is deleted
@@ -48,7 +48,7 @@ type postIndex struct {
 }
 
 // Merge creates a new index in the file dst that corresponds to merging
-// the two indices src1 and src2.  If both src1 and src2 claim responsibility
+// the two indices src1 and src2. If both src1 and src2 claim responsibility
 // for a path, src2 is assumed to be newer and is given preference.
 func Merge(dst, src1, src2 string) error {
 	ix1, err := Open(src1)

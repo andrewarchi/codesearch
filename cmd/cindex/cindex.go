@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -36,14 +36,14 @@ or, equivalently:
 	cindex /usr/include
 
 If cindex is invoked with no paths, it reindexes the paths that have
-already been added, in case the files have changed.  Thus, 'cindex' by
+already been added, in case the files have changed. Thus, 'cindex' by
 itself is a useful command to run in a nightly cron job.
 
 The -list flag causes cindex to list the paths it has indexed and exit.
 
 By default cindex adds the named paths to the index but preserves 
 information about other paths that might already be indexed
-(the ones printed by cindex -list).  The -reset flag causes cindex to
+(the ones printed by cindex -list). The -reset flag causes cindex to
 delete the existing index before indexing the new paths.
 With no path arguments, cindex -reset removes the index.
 `

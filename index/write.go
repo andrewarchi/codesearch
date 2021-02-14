@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -16,7 +16,7 @@ import (
 	"github.com/andrewarchi/codesearch/sparse"
 )
 
-// Index writing.  See read.go for details of on-disk format.
+// Index writing. See read.go for details of on-disk format.
 //
 // It would suffice to make a single large list of (trigram, file#) pairs
 // while processing the files one at a time, sort that list by trigram,
@@ -28,7 +28,7 @@ import (
 // read them back in.
 //
 // It would also be useful to be able to create an index for a subset
-// of the files and then merge that index into an existing one.  This would
+// of the files and then merge that index into an existing one. This would
 // allow incremental updating of an existing index when a directory changes.
 // But we have not implemented that.
 
@@ -113,7 +113,7 @@ func (ix *IndexWriter) AddPaths(paths []string) {
 }
 
 // AddFile adds the file with the given name (opened using os.Open)
-// to the index.  It logs errors using package log.
+// to the index. It logs errors using package log.
 func (ix *IndexWriter) AddFile(name string) error {
 	f, err := os.Open(name)
 	if err != nil {
@@ -527,7 +527,7 @@ type bufWriter struct {
 }
 
 // bufCreate creates a new file with the given name and returns a
-// corresponding bufWriter.  If name is empty, bufCreate uses a
+// corresponding bufWriter. If name is empty, bufCreate uses a
 // temporary file.
 func bufCreate(name string) (*bufWriter, error) {
 	var (
@@ -688,7 +688,7 @@ func validUTF8(c1, c2 uint32) bool {
 // sortPost sorts the postentry list.
 // The list is already sorted by fileid (bottom 32 bits)
 // and the top 8 bits are always zero, so there are only
-// 24 bits to sort.  Run two rounds of 12-bit radix sort.
+// 24 bits to sort. Run two rounds of 12-bit radix sort.
 const sortK = 12
 
 var sortTmp []postEntry

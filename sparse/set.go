@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 package sparse
 
 // For comparison: running cindex over the Linux 2.6 kernel with this
-// implementation of trigram sets takes 11 seconds.  If I change it to
+// implementation of trigram sets takes 11 seconds. If I change it to
 // a bitmap (which must be cleared between files) it takes 25 seconds.
 
 // A Set is a sparse set of uint32 values.

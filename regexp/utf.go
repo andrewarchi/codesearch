@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -24,7 +24,7 @@ func toByteProg(prog *syntax.Prog) error {
 		i := &prog.Inst[pc]
 		switch i.Op {
 		case syntax.InstRune, syntax.InstRune1:
-			// General rune range.  PIA.
+			// General rune range. PIA.
 			// TODO: Pick off single-byte case.
 			if lo, hi, fold, ok := oneByteRange(i); ok {
 				i.Op = instByteRange
@@ -146,7 +146,7 @@ type runeBuilder struct {
 
 func (b *runeBuilder) init(p *syntax.Prog, begin, out uint32) {
 	// We will rewrite p.Inst[begin] to hold the accumulated
-	// machine.  For now, there is no match.
+	// machine. For now, there is no match.
 	p.Inst[begin].Op = instFail
 
 	b.begin = begin
@@ -252,7 +252,7 @@ func (b *runeBuilder) addRange(lo, hi rune, fold bool) {
 		}
 	}
 
-	// Finally.  Generate byte matching equivalent for lo-hi.
+	// Finally. Generate byte matching equivalent for lo-hi.
 	var ulo, uhi [utf8.UTFMax]byte
 	n := utf8.EncodeRune(ulo[:], lo)
 	m := utf8.EncodeRune(uhi[:], hi)

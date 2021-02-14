@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -22,7 +22,7 @@ package index
 //
 // The list of names is a sorted sequence of NUL-terminated file names.
 // The initial entry in the list corresponds to file #0,
-// the next to file #1, and so on.  The list ends with an
+// the next to file #1, and so on. The list ends with an
 // empty name ("\x00").
 //
 // The list of posting lists are a sequence of posting lists.
@@ -31,19 +31,19 @@ package index
 //	trigram [3]
 //	deltas [v]...
 //
-// The trigram gives the 3 byte trigram that this list describes.  The
+// The trigram gives the 3 byte trigram that this list describes. The
 // delta list is a sequence of varint-encoded deltas between file
-// IDs, ending with a zero delta.  For example, the delta list [2,5,1,1,0]
-// encodes the file ID list 1, 6, 7, 8.  The delta list [0] would
+// IDs, ending with a zero delta. For example, the delta list [2,5,1,1,0]
+// encodes the file ID list 1, 6, 7, 8. The delta list [0] would
 // encode the empty file ID list, but empty posting lists are usually
-// not recorded at all.  The list of posting lists ends with an entry
+// not recorded at all. The list of posting lists ends with an entry
 // with trigram "\xff\xff\xff" and a delta list consisting a single zero.
 //
-// The indexes enable efficient random access to the lists.  The name
+// The indexes enable efficient random access to the lists. The name
 // index is a sequence of 4-byte big-endian values listing the byte
-// offset in the name list where each name begins.  The posting list
+// offset in the name list where each name begins. The posting list
 // index is a sequence of index entries describing each successive
-// posting list.  Each index entry has the form:
+// posting list. Each index entry has the form:
 //
 //	trigram [3]
 //	file count [4]
@@ -51,7 +51,7 @@ package index
 //
 // Index entries are only written for the non-empty posting lists,
 // so finding the posting list for a specific trigram requires a
-// binary search over the posting list index.  In practice, the majority
+// binary search over the posting list index. In practice, the majority
 // of the possible trigrams are never seen, so omitting the missing
 // ones represents a significant storage savings.
 //

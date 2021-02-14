@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -13,10 +13,10 @@ import (
 )
 
 // A Query is a matching machine, like a regular expression,
-// that matches some text and not other text.  When we compute a
+// that matches some text and not other text. When we compute a
 // Query from a regexp, the Query is a conservative version of the
 // regexp: it matches everything the regexp would match, and probably
-// quite a bit more.  We can then filter target files by whether they match
+// quite a bit more. We can then filter target files by whether they match
 // the Query (using a trigram index) before running the comparatively
 // more expensive regexp machinery.
 type Query struct {
@@ -224,7 +224,7 @@ func trigramsImply(t []string, q *Query) bool {
 }
 
 // maybeRewrite rewrites q to use op if it is possible to do so
-// without changing the meaning.  It also simplifies if the node
+// without changing the meaning. It also simplifies if the node
 // is an empty OR or AND.
 func (q *Query) maybeRewrite(op QueryOp) {
 	if q.Op != QAnd && q.Op != QOr {
@@ -359,7 +359,7 @@ type regexpInfo struct {
 const (
 	// Exact sets are limited to maxExact strings.
 	// If they get too big, simplify will rewrite the regexpInfo
-	// to use prefix and suffix instead.  It's not worthwhile for
+	// to use prefix and suffix instead. It's not worthwhile for
 	// this to be bigger than maxSet.
 	// Because we allow the maximum length of an exact string
 	// to grow to 5 below (see simplify), it helps to avoid ridiculous
@@ -370,7 +370,7 @@ const (
 	// Prefix and suffix sets are limited to maxSet strings.
 	// If they get too big, simplify will replace groups of strings
 	// sharing a common leading prefix (or trailing suffix) with
-	// that common prefix (or suffix).  It is useful for maxSet
+	// that common prefix (or suffix). It is useful for maxSet
 	// to be at least 2³ = 8 so that we can exactly
 	// represent a case-insensitive abc by the set
 	// {abc, abC, aBc, aBC, Abc, AbC, ABc, ABC}.
@@ -495,7 +495,7 @@ func analyze(re *syntax.Regexp) (ret regexpInfo) {
 	case syntax.OpPlus:
 		// x+
 		// Since there has to be at least one x, the prefixes and suffixes
-		// stay the same.  If x was exact, it isn't anymore.
+		// stay the same. If x was exact, it isn't anymore.
 		info = analyze(re.Sub[0])
 		if info.exact.have() {
 			info.prefix = info.exact
@@ -584,7 +584,7 @@ func concat(x, y regexpInfo) (out regexpInfo) {
 	// If all the possible strings in the cross product of x.suffix
 	// and y.prefix are long enough, then the trigram for one
 	// of them must be present and would not necessarily be
-	// accounted for in xy.prefix or xy.suffix yet.  Cut things off
+	// accounted for in xy.prefix or xy.suffix yet. Cut things off
 	// at maxSet just to keep the sets manageable.
 	if !x.exact.have() && !y.exact.have() &&
 		x.suffix.size() <= maxSet && y.prefix.size() <= maxSet &&
@@ -660,7 +660,7 @@ func (info *regexpInfo) simplify(force bool) {
 
 // simplifySet reduces the size of the given set (either prefix or suffix).
 // There is no need to pass around enormous prefix or suffix sets, since
-// they will only be used to create trigrams.  As they get too big, simplifySet
+// they will only be used to create trigrams. As they get too big, simplifySet
 // moves the information they contain into the match query, which is
 // more efficient to pass around.
 func (info *regexpInfo) simplifySet(s *stringSet) {
