@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp/syntax"
 	"runtime/pprof"
 
 	"github.com/andrewarchi/codesearch/index"
@@ -79,11 +80,11 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	pat := "(?m)" + args[0]
+	reFlags := syntax.Perl &^ syntax.OneLine
 	if *iFlag {
-		pat = "(?i)" + pat
+		reFlags |= syntax.FoldCase
 	}
-	re, err := regexp.Compile(pat)
+	re, err := regexp.CompileFlags(args[0], reFlags)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -28,7 +28,14 @@ func (re *Regexp) String() string {
 // Compile parses a regular expression and returns, if successful,
 // a Regexp object that can be used to match against lines of text.
 func Compile(expr string) (*Regexp, error) {
-	re, err := syntax.Parse(expr, syntax.Perl)
+	return CompileFlags(expr, syntax.Perl)
+}
+
+// CompileFlags parses a regular expression with the given flags and
+// returns, if successful, a Regexp object that can be used to match
+// against lines of text.
+func CompileFlags(expr string, flags syntax.Flags) (*Regexp, error) {
+	re, err := syntax.Parse(expr, flags)
 	if err != nil {
 		return nil, err
 	}
