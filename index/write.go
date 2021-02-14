@@ -5,6 +5,7 @@
 package index
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -58,16 +59,26 @@ type IndexWriter struct {
 const npost = 64 << 20 / 8 // 64 MB worth of post entries
 
 // Create returns a new IndexWriter that will write the index to file.
-func Create(file string) *IndexWriter {
-	return &IndexWriter{
-		trigram:   sparse.NewSet(1 << 24),
-		nameData:  bufCreate(""),
-		nameIndex: bufCreate(""),
-		postIndex: bufCreate(""),
-		main:      bufCreate(file),
-		post:      make([]postEntry, 0, npost),
-		inbuf:     make([]byte, 16384),
+func Create(file string) (*IndexWriter, error) {
+	w := &IndexWriter{
+		trigram: sparse.NewSet(1 << 24),
+		post:    make([]postEntry, 0, npost),
+		inbuf:   make([]byte, 16384),
 	}
+	var err error
+	if w.nameData, err = bufCreate(""); err != nil {
+		return nil, err
+	}
+	if w.nameIndex, err = bufCreate(""); err != nil {
+		return nil, err
+	}
+	if w.postIndex, err = bufCreate(""); err != nil {
+		return nil, err
+	}
+	if w.main, err = bufCreate(file); err != nil {
+		return nil, err
+	}
+	return w, nil
 }
 
 // A postEntry is an in-memory (trigram, file#) pair.
@@ -103,19 +114,18 @@ func (ix *IndexWriter) AddPaths(paths []string) {
 
 // AddFile adds the file with the given name (opened using os.Open)
 // to the index.  It logs errors using package log.
-func (ix *IndexWriter) AddFile(name string) {
+func (ix *IndexWriter) AddFile(name string) error {
 	f, err := os.Open(name)
 	if err != nil {
-		log.Print(err)
-		return
+		return err
 	}
 	defer f.Close()
-	ix.Add(name, f)
+	return ix.Add(name, f)
 }
 
 // Add adds the file f to the index under the given name.
 // It logs errors using package log.
-func (ix *IndexWriter) Add(name string, f io.Reader) {
+func (ix *IndexWriter) Add(name string, f io.Reader) error {
 	ix.trigram.Reset()
 	var (
 		c       = byte(0)
@@ -134,11 +144,9 @@ func (ix *IndexWriter) Add(name string, f io.Reader) {
 					if err == io.EOF {
 						break
 					}
-					log.Printf("%s: %v\n", name, err)
-					return
+					return fmt.Errorf("%s: %w", name, err)
 				}
-				log.Printf("%s: 0-length read\n", name)
-				return
+				return fmt.Errorf("%s: 0-length read", name)
 			}
 			buf = buf[:n]
 			i = 0
@@ -153,19 +161,19 @@ func (ix *IndexWriter) Add(name string, f io.Reader) {
 			if ix.LogSkip {
 				log.Printf("%s: invalid UTF-8, ignoring\n", name)
 			}
-			return
+			return nil
 		}
 		if n > maxFileLen {
 			if ix.LogSkip {
 				log.Printf("%s: too long, ignoring\n", name)
 			}
-			return
+			return nil
 		}
 		if linelen++; linelen > maxLineLen {
 			if ix.LogSkip {
 				log.Printf("%s: very long lines, ignoring\n", name)
 			}
-			return
+			return nil
 		}
 		if c == '\n' {
 			linelen = 0
@@ -175,7 +183,7 @@ func (ix *IndexWriter) Add(name string, f io.Reader) {
 		if ix.LogSkip {
 			log.Printf("%s: too many trigrams, probably not text, ignoring\n", name)
 		}
-		return
+		return nil
 	}
 	ix.totalBytes += n
 
@@ -183,39 +191,67 @@ func (ix *IndexWriter) Add(name string, f io.Reader) {
 		log.Printf("%d %d %s\n", n, ix.trigram.Len(), name)
 	}
 
-	fileid := ix.addName(name)
+	fileid, err := ix.addName(name)
+	if err != nil {
+		return err
+	}
 	for _, trigram := range ix.trigram.Dense() {
 		if len(ix.post) >= cap(ix.post) {
-			ix.flushPost()
+			if err := ix.flushPost(); err != nil {
+				return err
+			}
 		}
 		ix.post = append(ix.post, makePostEntry(trigram, fileid))
 	}
+	return nil
 }
 
 // Flush flushes the index entry to the target file.
-func (ix *IndexWriter) Flush() {
-	ix.addName("")
+func (ix *IndexWriter) Flush() error {
+	if _, err := ix.addName(""); err != nil {
+		return err
+	}
 
 	var off [5]uint32
-	ix.main.writeString(magic)
+	if err := ix.main.writeString(magic); err != nil {
+		return err
+	}
 	off[0] = ix.main.offset()
 	for _, p := range ix.paths {
-		ix.main.writeString(p)
-		ix.main.writeString("\x00")
+		if err := ix.main.writeString(p); err != nil {
+			return err
+		}
+		if err := ix.main.writeString("\x00"); err != nil {
+			return err
+		}
 	}
-	ix.main.writeString("\x00")
+	if err := ix.main.writeString("\x00"); err != nil {
+		return err
+	}
 	off[1] = ix.main.offset()
-	copyFile(ix.main, ix.nameData)
-	off[2] = ix.main.offset()
-	ix.mergePost(ix.main)
-	off[3] = ix.main.offset()
-	copyFile(ix.main, ix.nameIndex)
-	off[4] = ix.main.offset()
-	copyFile(ix.main, ix.postIndex)
-	for _, v := range off {
-		ix.main.writeUint32(v)
+	if err := copyFile(ix.main, ix.nameData); err != nil {
+		return nil
 	}
-	ix.main.writeString(trailerMagic)
+	off[2] = ix.main.offset()
+	if err := ix.mergePost(ix.main); err != nil {
+		return nil
+	}
+	off[3] = ix.main.offset()
+	if err := copyFile(ix.main, ix.nameIndex); err != nil {
+		return nil
+	}
+	off[4] = ix.main.offset()
+	if err := copyFile(ix.main, ix.postIndex); err != nil {
+		return nil
+	}
+	for _, v := range off {
+		if err := ix.main.writeUint32(v); err != nil {
+			return err
+		}
+	}
+	if err := ix.main.writeString(trailerMagic); err != nil {
+		return err
+	}
 
 	os.Remove(ix.nameData.name)
 	for _, f := range ix.postFile {
@@ -226,38 +262,50 @@ func (ix *IndexWriter) Flush() {
 
 	log.Printf("%d data bytes, %d index bytes", ix.totalBytes, ix.main.offset())
 
-	ix.main.flush()
+	return ix.main.flush()
 }
 
-func copyFile(dst, src *bufWriter) {
-	dst.flush()
-	_, err := io.Copy(dst.file, src.finish())
-	if err != nil {
-		log.Fatalf("copying %s to %s: %v", src.name, dst.name, err)
+func copyFile(dst, src *bufWriter) error {
+	if err := dst.flush(); err != nil {
+		return err
 	}
+	f, err := src.finish()
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst.file, f); err != nil {
+		return fmt.Errorf("copying %s to %s: %w", src.name, dst.name, err)
+	}
+	return nil
 }
 
 // addName adds the file with the given name to the index.
 // It returns the assigned file ID number.
-func (ix *IndexWriter) addName(name string) uint32 {
+func (ix *IndexWriter) addName(name string) (uint32, error) {
 	if strings.Contains(name, "\x00") {
-		log.Fatalf("%q: file has NUL byte in name", name)
+		return 0, fmt.Errorf("%q: file has NUL byte in name", name)
 	}
 
-	ix.nameIndex.writeUint32(ix.nameData.offset())
-	ix.nameData.writeString(name)
-	ix.nameData.writeByte(0)
+	if err := ix.nameIndex.writeUint32(ix.nameData.offset()); err != nil {
+		return 0, err
+	}
+	if err := ix.nameData.writeString(name); err != nil {
+		return 0, err
+	}
+	if err := ix.nameData.writeByte(0); err != nil {
+		return 0, err
+	}
 	id := ix.numName
 	ix.numName++
-	return uint32(id)
+	return uint32(id), nil
 }
 
 // flushPost writes ix.post to a new temporary file and
 // clears the slice.
-func (ix *IndexWriter) flushPost() {
+func (ix *IndexWriter) flushPost() error {
 	w, err := ioutil.TempFile("", "csearch-index")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	if ix.Verbose {
 		log.Printf("flush %d entries to %s", len(ix.post), w.Name())
@@ -269,24 +317,27 @@ func (ix *IndexWriter) flushPost() {
 	data := (*[npost * 8]byte)(unsafe.Pointer(&ix.post[0]))[:len(ix.post)*8]
 	if n, err := w.Write(data); err != nil || n < len(data) {
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
-		log.Fatalf("short write writing %s", w.Name())
+		return fmt.Errorf("codesearch/index: short write writing %s", w.Name())
 	}
 
 	ix.post = ix.post[:0]
-	w.Seek(0, 0)
+	_, err = w.Seek(0, 0)
 	ix.postFile = append(ix.postFile, w)
+	return err
 }
 
 // mergePost reads the flushed index entries and merges them
 // into posting lists, writing the resulting lists to out.
-func (ix *IndexWriter) mergePost(out *bufWriter) {
+func (ix *IndexWriter) mergePost(out *bufWriter) error {
 	var h postHeap
 
 	log.Printf("merge %d files + mem", len(ix.postFile))
 	for _, f := range ix.postFile {
-		h.addFile(f)
+		if err := h.addFile(f); err != nil {
+			return err
+		}
 	}
 	sortPost(ix.post)
 	h.addMem(ix.post)
@@ -305,23 +356,36 @@ func (ix *IndexWriter) mergePost(out *bufWriter) {
 		// posting list
 		fileid := ^uint32(0)
 		nfile := uint32(0)
-		out.write(ix.buf[:3])
+		if err := out.write(ix.buf[:3]); err != nil {
+			return err
+		}
 		for ; e.trigram() == trigram && trigram != 1<<24-1; e = h.next() {
-			out.writeUvarint(e.fileid() - fileid)
+			if err := out.writeUvarint(e.fileid() - fileid); err != nil {
+				return err
+			}
 			fileid = e.fileid()
 			nfile++
 		}
-		out.writeUvarint(0)
+		if err := out.writeUvarint(0); err != nil {
+			return err
+		}
 
 		// index entry
-		ix.postIndex.write(ix.buf[:3])
-		ix.postIndex.writeUint32(nfile)
-		ix.postIndex.writeUint32(offset)
+		if err := ix.postIndex.write(ix.buf[:3]); err != nil {
+			return err
+		}
+		if err := ix.postIndex.writeUint32(nfile); err != nil {
+			return err
+		}
+		if err := ix.postIndex.writeUint32(offset); err != nil {
+			return err
+		}
 
 		if trigram == 1<<24-1 {
 			break
 		}
 	}
+	return nil
 }
 
 // A postChunk represents a chunk of post entries flushed to disk or
@@ -338,10 +402,15 @@ type postHeap struct {
 	ch []*postChunk
 }
 
-func (h *postHeap) addFile(f *os.File) {
-	data := mmapFile(f).d
-	m := (*[npost]postEntry)(unsafe.Pointer(&data[0]))[:len(data)/8]
+func (h *postHeap) addFile(f *os.File) error {
+	data, err := mmapFile(f)
+	if err != nil {
+		return err
+	}
+	d := data.d
+	m := (*[npost]postEntry)(unsafe.Pointer(&d[0]))[:len(d)/8]
 	h.addMem(m)
+	return nil
 }
 
 func (h *postHeap) addMem(x []postEntry) {
@@ -460,7 +529,7 @@ type bufWriter struct {
 // bufCreate creates a new file with the given name and returns a
 // corresponding bufWriter.  If name is empty, bufCreate uses a
 // temporary file.
-func bufCreate(name string) *bufWriter {
+func bufCreate(name string) (*bufWriter, error) {
 	var (
 		f   *os.File
 		err error
@@ -471,48 +540,57 @@ func bufCreate(name string) *bufWriter {
 		f, err = ioutil.TempFile("", "csearch")
 	}
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	return &bufWriter{
 		name: f.Name(),
 		buf:  make([]byte, 0, 256<<10),
 		file: f,
-	}
+	}, nil
 }
 
-func (b *bufWriter) write(x []byte) {
+func (b *bufWriter) write(x []byte) error {
 	n := cap(b.buf) - len(b.buf)
 	if len(x) > n {
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 		if len(x) >= cap(b.buf) {
 			if _, err := b.file.Write(x); err != nil {
-				log.Fatalf("writing %s: %v", b.name, err)
+				return fmt.Errorf("writing %s: %w", b.name, err)
 			}
-			return
+			return nil
 		}
 	}
 	b.buf = append(b.buf, x...)
+	return nil
 }
 
-func (b *bufWriter) writeByte(x byte) {
+func (b *bufWriter) writeByte(x byte) error {
 	if len(b.buf) >= cap(b.buf) {
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 	}
 	b.buf = append(b.buf, x)
+	return nil
 }
 
-func (b *bufWriter) writeString(s string) {
+func (b *bufWriter) writeString(s string) error {
 	n := cap(b.buf) - len(b.buf)
 	if len(s) > n {
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 		if len(s) >= cap(b.buf) {
 			if _, err := b.file.WriteString(s); err != nil {
-				log.Fatalf("writing %s: %v", b.name, err)
+				return fmt.Errorf("writing %s: %w", b.name, err)
 			}
-			return
+			return nil
 		}
 	}
 	b.buf = append(b.buf, s...)
+	return nil
 }
 
 // offset returns the current write offset.
@@ -525,42 +603,55 @@ func (b *bufWriter) offset() uint32 {
 	return uint32(off)
 }
 
-func (b *bufWriter) flush() {
+func (b *bufWriter) flush() error {
 	if len(b.buf) == 0 {
-		return
+		return nil
 	}
 	_, err := b.file.Write(b.buf)
 	if err != nil {
-		log.Fatalf("writing %s: %v", b.name, err)
+		return fmt.Errorf("writing %s: %w", b.name, err)
 	}
 	b.buf = b.buf[:0]
+	return nil
 }
 
 // finish flushes the file to disk and returns an open file ready for reading.
-func (b *bufWriter) finish() *os.File {
-	b.flush()
+func (b *bufWriter) finish() (*os.File, error) {
+	if err := b.flush(); err != nil {
+		return nil, err
+	}
 	f := b.file
-	f.Seek(0, 0)
-	return f
+	if _, err := f.Seek(0, 0); err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
-func (b *bufWriter) writeTrigram(t uint32) {
+func (b *bufWriter) writeTrigram(t uint32) error {
 	if cap(b.buf)-len(b.buf) < 3 {
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 	}
 	b.buf = append(b.buf, byte(t>>16), byte(t>>8), byte(t))
+	return nil
 }
 
-func (b *bufWriter) writeUint32(x uint32) {
+func (b *bufWriter) writeUint32(x uint32) error {
 	if cap(b.buf)-len(b.buf) < 4 {
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 	}
 	b.buf = append(b.buf, byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
+	return nil
 }
 
-func (b *bufWriter) writeUvarint(x uint32) {
+func (b *bufWriter) writeUvarint(x uint32) error {
 	if cap(b.buf)-len(b.buf) < 5 {
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 	}
 	switch {
 	case x < 1<<7:
@@ -574,6 +665,7 @@ func (b *bufWriter) writeUvarint(x uint32) {
 	default:
 		b.buf = append(b.buf, byte(x|0x80), byte(x>>7|0x80), byte(x>>14|0x80), byte(x>>21|0x80), byte(x>>28))
 	}
+	return nil
 }
 
 // validUTF8 reports whether the byte pair can appear in a

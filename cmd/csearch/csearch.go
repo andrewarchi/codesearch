@@ -101,7 +101,10 @@ func Main() {
 		log.Printf("query: %s\n", q)
 	}
 
-	ix := index.Open(index.File())
+	ix, err := index.Open(index.File())
+	if err != nil {
+		log.Fatal(err)
+	}
 	ix.Verbose = *verboseFlag
 	var post []uint32
 	if *bruteFlag {
@@ -117,7 +120,10 @@ func Main() {
 		fnames := make([]uint32, 0, len(post))
 
 		for _, fileid := range post {
-			name := ix.Name(fileid)
+			name, err := ix.Name(fileid)
+			if err != nil {
+				log.Fatal(err)
+			}
 			if fre.MatchString(name, true, true) < 0 {
 				continue
 			}
@@ -131,7 +137,10 @@ func Main() {
 	}
 
 	for _, fileid := range post {
-		name := ix.Name(fileid)
+		name, err := ix.Name(fileid)
+		if err != nil {
+			log.Fatal(err)
+		}
 		g.File(name)
 	}
 

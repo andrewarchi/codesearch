@@ -67,6 +67,7 @@ package index
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -94,96 +95,136 @@ type Index struct {
 
 const postEntrySize = 3 + 4 + 4
 
-func Open(file string) *Index {
-	mm := mmap(file)
+func Open(file string) (*Index, error) {
+	mm, err := mmap(file)
+	if err != nil {
+		return nil, err
+	}
 	if len(mm.d) < 4*4+len(trailerMagic) || string(mm.d[len(mm.d)-len(trailerMagic):]) != trailerMagic {
-		corrupt()
+		return nil, corrupt()
 	}
 	n := uint32(len(mm.d) - len(trailerMagic) - 5*4)
-	ix := &Index{data: mm}
-	ix.pathData = ix.uint32(n)
-	ix.nameData = ix.uint32(n + 4)
-	ix.postData = ix.uint32(n + 8)
-	ix.nameIndex = ix.uint32(n + 12)
-	ix.postIndex = ix.uint32(n + 16)
+	ix := &Index{data: *mm}
+	if ix.pathData, err = ix.uint32(n); err != nil {
+		return nil, err
+	}
+	if ix.nameData, err = ix.uint32(n + 4); err != nil {
+		return nil, err
+	}
+	if ix.postData, err = ix.uint32(n + 8); err != nil {
+		return nil, err
+	}
+	if ix.nameIndex, err = ix.uint32(n + 12); err != nil {
+		return nil, err
+	}
+	if ix.postIndex, err = ix.uint32(n + 16); err != nil {
+		return nil, err
+	}
 	ix.numName = int((ix.postIndex-ix.nameIndex)/4) - 1
 	ix.numPost = int((n - ix.postIndex) / postEntrySize)
-	return ix
+	return ix, nil
 }
 
 // slice returns the slice of index data starting at the given byte offset.
 // If n >= 0, the slice must have length at least n and is truncated to length n.
-func (ix *Index) slice(off uint32, n int) []byte {
+func (ix *Index) slice(off uint32, n int) ([]byte, error) {
 	o := int(off)
 	if uint32(o) != off || n >= 0 && o+n > len(ix.data.d) {
-		corrupt()
+		return nil, corrupt()
 	}
 	if n < 0 {
-		return ix.data.d[o:]
+		return ix.data.d[o:], nil
 	}
-	return ix.data.d[o : o+n]
+	return ix.data.d[o : o+n], nil
 }
 
 // uint32 returns the uint32 value at the given offset in the index data.
-func (ix *Index) uint32(off uint32) uint32 {
-	return binary.BigEndian.Uint32(ix.slice(off, 4))
+func (ix *Index) uint32(off uint32) (uint32, error) {
+	d, err := ix.slice(off, 4)
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint32(d), nil
 }
 
 // uvarint returns the varint value at the given offset in the index data.
-func (ix *Index) uvarint(off uint32) uint32 {
-	v, n := binary.Uvarint(ix.slice(off, -1))
-	if n <= 0 {
-		corrupt()
+func (ix *Index) uvarint(off uint32) (uint32, error) {
+	d, err := ix.slice(off, -1)
+	if err != nil {
+		return 0, err
 	}
-	return uint32(v)
+	v, n := binary.Uvarint(d)
+	if n <= 0 {
+		return 0, corrupt()
+	}
+	return uint32(v), nil
 }
 
 // Paths returns the list of indexed paths.
-func (ix *Index) Paths() []string {
+func (ix *Index) Paths() ([]string, error) {
 	off := ix.pathData
 	var x []string
 	for {
-		s := ix.str(off)
+		s, err := ix.str(off)
+		if err != nil {
+			return nil, err
+		}
 		if len(s) == 0 {
 			break
 		}
 		x = append(x, string(s))
 		off += uint32(len(s) + 1)
 	}
-	return x
+	return x, nil
 }
 
 // NameBytes returns the name corresponding to the given fileid.
-func (ix *Index) NameBytes(fileid uint32) []byte {
-	off := ix.uint32(ix.nameIndex + 4*fileid)
+func (ix *Index) NameBytes(fileid uint32) ([]byte, error) {
+	off, err := ix.uint32(ix.nameIndex + 4*fileid)
+	if err != nil {
+		return nil, err
+	}
 	return ix.str(ix.nameData + off)
 }
 
-func (ix *Index) str(off uint32) []byte {
-	str := ix.slice(off, -1)
+func (ix *Index) str(off uint32) ([]byte, error) {
+	str, err := ix.slice(off, -1)
+	if err != nil {
+		return nil, err
+	}
 	i := bytes.IndexByte(str, '\x00')
 	if i < 0 {
-		corrupt()
+		return nil, corrupt()
 	}
-	return str[:i]
+	return str[:i], nil
 }
 
 // Name returns the name corresponding to the given fileid.
-func (ix *Index) Name(fileid uint32) string {
-	return string(ix.NameBytes(fileid))
+func (ix *Index) Name(fileid uint32) (string, error) {
+	name, err := ix.NameBytes(fileid)
+	if err != nil {
+		return "", err
+	}
+	return string(name), nil
 }
 
 // listAt returns the index list entry at the given offset.
-func (ix *Index) listAt(off uint32) (trigram, count, offset uint32) {
-	d := ix.slice(ix.postIndex+off, postEntrySize)
+func (ix *Index) listAt(off uint32) (trigram, count, offset uint32, err error) {
+	d, err := ix.slice(ix.postIndex+off, postEntrySize)
+	if err != nil {
+		return 0, 0, 0, err
+	}
 	trigram = uint32(d[0])<<16 | uint32(d[1])<<8 | uint32(d[2])
 	count = binary.BigEndian.Uint32(d[3:])
 	offset = binary.BigEndian.Uint32(d[3+4:])
 	return
 }
 
-func (ix *Index) dumpPosting() {
-	d := ix.slice(ix.postIndex, postEntrySize*ix.numPost)
+func (ix *Index) dumpPosting() error {
+	d, err := ix.slice(ix.postIndex, postEntrySize*ix.numPost)
+	if err != nil {
+		return err
+	}
 	for i := 0; i < ix.numPost; i++ {
 		j := i * postEntrySize
 		t := uint32(d[j])<<16 | uint32(d[j+1])<<8 | uint32(d[j+2])
@@ -191,23 +232,27 @@ func (ix *Index) dumpPosting() {
 		offset := binary.BigEndian.Uint32(d[j+3+4:])
 		log.Printf("%#x: %d at %d", t, count, offset)
 	}
+	return nil
 }
 
-func (ix *Index) findList(trigram uint32) (count int, offset uint32) {
+func (ix *Index) findList(trigram uint32) (count int, offset uint32, err error) {
 	// binary search
-	d := ix.slice(ix.postIndex, postEntrySize*ix.numPost)
+	d, err := ix.slice(ix.postIndex, postEntrySize*ix.numPost)
+	if err != nil {
+		return 0, 0, err
+	}
 	i := sort.Search(ix.numPost, func(i int) bool {
 		i *= postEntrySize
 		t := uint32(d[i])<<16 | uint32(d[i+1])<<8 | uint32(d[i+2])
 		return t >= trigram
 	})
 	if i >= ix.numPost {
-		return 0, 0
+		return 0, 0, nil
 	}
 	i *= postEntrySize
 	t := uint32(d[i])<<16 | uint32(d[i+1])<<8 | uint32(d[i+2])
 	if t != trigram {
-		return 0, 0
+		return 0, 0, nil
 	}
 	count = int(binary.BigEndian.Uint32(d[i+3:]))
 	offset = binary.BigEndian.Uint32(d[i+3+4:])
@@ -223,30 +268,35 @@ type postReader struct {
 	restrict []uint32
 }
 
-func (r *postReader) init(ix *Index, trigram uint32, restrict []uint32) {
-	count, offset := ix.findList(trigram)
-	if count == 0 {
-		return
+func (r *postReader) init(ix *Index, trigram uint32, restrict []uint32) error {
+	count, offset, err := ix.findList(trigram)
+	if count == 0 || err != nil {
+		return err
+	}
+	d, err := ix.slice(ix.postData+offset+3, -1)
+	if err != nil {
+		return err
 	}
 	r.ix = ix
 	r.count = count
 	r.offset = offset
 	r.fileid = ^uint32(0)
-	r.d = ix.slice(ix.postData+offset+3, -1)
+	r.d = d
 	r.restrict = restrict
+	return nil
 }
 
 func (r *postReader) max() int {
 	return int(r.count)
 }
 
-func (r *postReader) next() bool {
+func (r *postReader) next() (bool, error) {
 	for r.count > 0 {
 		r.count--
 		delta64, n := binary.Uvarint(r.d)
 		delta := uint32(delta64)
 		if n <= 0 || delta == 0 {
-			corrupt()
+			return false, corrupt()
 		}
 		r.d = r.d[n:]
 		r.fileid += delta
@@ -260,40 +310,56 @@ func (r *postReader) next() bool {
 				continue
 			}
 		}
-		return true
+		return true, nil
 	}
 	// list should end with terminating 0 delta
 	if r.d != nil && (len(r.d) == 0 || r.d[0] != 0) {
-		corrupt()
+		return false, corrupt()
 	}
 	r.fileid = ^uint32(0)
-	return false
+	return false, nil
 }
 
-func (ix *Index) PostingList(trigram uint32) []uint32 {
+func (ix *Index) PostingList(trigram uint32) ([]uint32, error) {
 	return ix.postingList(trigram, nil)
 }
 
-func (ix *Index) postingList(trigram uint32, restrict []uint32) []uint32 {
+func (ix *Index) postingList(trigram uint32, restrict []uint32) ([]uint32, error) {
 	var r postReader
-	r.init(ix, trigram, restrict)
+	if err := r.init(ix, trigram, restrict); err != nil {
+		return nil, err
+	}
 	x := make([]uint32, 0, r.max())
-	for r.next() {
+	for {
+		ok, err := r.next()
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			break
+		}
 		x = append(x, r.fileid)
 	}
-	return x
+	return x, nil
 }
 
-func (ix *Index) PostingAnd(list []uint32, trigram uint32) []uint32 {
+func (ix *Index) PostingAnd(list []uint32, trigram uint32) ([]uint32, error) {
 	return ix.postingAnd(list, trigram, nil)
 }
 
-func (ix *Index) postingAnd(list []uint32, trigram uint32, restrict []uint32) []uint32 {
+func (ix *Index) postingAnd(list []uint32, trigram uint32, restrict []uint32) ([]uint32, error) {
 	var r postReader
 	r.init(ix, trigram, restrict)
 	x := list[:0]
 	i := 0
-	for r.next() {
+	for {
+		ok, err := r.next()
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			break
+		}
 		fileid := r.fileid
 		for i < len(list) && list[i] < fileid {
 			i++
@@ -303,19 +369,26 @@ func (ix *Index) postingAnd(list []uint32, trigram uint32, restrict []uint32) []
 			i++
 		}
 	}
-	return x
+	return x, nil
 }
 
-func (ix *Index) PostingOr(list []uint32, trigram uint32) []uint32 {
+func (ix *Index) PostingOr(list []uint32, trigram uint32) ([]uint32, error) {
 	return ix.postingOr(list, trigram, nil)
 }
 
-func (ix *Index) postingOr(list []uint32, trigram uint32, restrict []uint32) []uint32 {
+func (ix *Index) postingOr(list []uint32, trigram uint32, restrict []uint32) ([]uint32, error) {
 	var r postReader
 	r.init(ix, trigram, restrict)
 	x := make([]uint32, 0, len(list)+r.max())
 	i := 0
-	for r.next() {
+	for {
+		ok, err := r.next()
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			break
+		}
 		fileid := r.fileid
 		for i < len(list) && list[i] < fileid {
 			x = append(x, list[i])
@@ -327,63 +400,69 @@ func (ix *Index) postingOr(list []uint32, trigram uint32, restrict []uint32) []u
 		}
 	}
 	x = append(x, list[i:]...)
-	return x
+	return x, nil
 }
 
-func (ix *Index) PostingQuery(q *Query) []uint32 {
+func (ix *Index) PostingQuery(q *Query) ([]uint32, error) {
 	return ix.postingQuery(q, nil)
 }
 
-func (ix *Index) postingQuery(q *Query, restrict []uint32) (ret []uint32) {
+func (ix *Index) postingQuery(q *Query, restrict []uint32) (ret []uint32, err error) {
 	var list []uint32
 	switch q.Op {
 	case QNone:
 		// nothing
 	case QAll:
 		if restrict != nil {
-			return restrict
+			return restrict, nil
 		}
 		list = make([]uint32, ix.numName)
 		for i := range list {
 			list[i] = uint32(i)
 		}
-		return list
+		return list, nil
 	case QAnd:
 		for _, t := range q.Trigram {
 			tri := uint32(t[0])<<16 | uint32(t[1])<<8 | uint32(t[2])
 			if list == nil {
-				list = ix.postingList(tri, restrict)
+				list, err = ix.postingList(tri, restrict)
 			} else {
-				list = ix.postingAnd(list, tri, restrict)
+				list, err = ix.postingAnd(list, tri, restrict)
 			}
-			if len(list) == 0 {
-				return nil
+			if len(list) == 0 || err != nil {
+				return nil, err
 			}
 		}
 		for _, sub := range q.Sub {
 			if list == nil {
 				list = restrict
 			}
-			list = ix.postingQuery(sub, list)
-			if len(list) == 0 {
-				return nil
+			list, err = ix.postingQuery(sub, list)
+			if len(list) == 0 || err != nil {
+				return nil, err
 			}
 		}
 	case QOr:
 		for _, t := range q.Trigram {
 			tri := uint32(t[0])<<16 | uint32(t[1])<<8 | uint32(t[2])
 			if list == nil {
-				list = ix.postingList(tri, restrict)
+				list, err = ix.postingList(tri, restrict)
 			} else {
-				list = ix.postingOr(list, tri, restrict)
+				list, err = ix.postingOr(list, tri, restrict)
+			}
+			if err != nil {
+				return nil, err
 			}
 		}
 		for _, sub := range q.Sub {
-			list1 := ix.postingQuery(sub, restrict)
+			list1, err := ix.postingQuery(sub, restrict)
+			if err != nil {
+				return nil, err
+			}
 			list = mergeOr(list, list1)
 		}
 	}
-	return list
+	return list, nil
 }
 
 func mergeOr(l1, l2 []uint32) []uint32 {
@@ -407,8 +486,8 @@ func mergeOr(l1, l2 []uint32) []uint32 {
 	return l
 }
 
-func corrupt() {
-	log.Fatal("corrupt index: remove " + File())
+func corrupt() error {
+	return fmt.Errorf("corrupt index: remove %s", File())
 }
 
 // An mmapData is mmap'ed read-only data from a file.
@@ -418,10 +497,10 @@ type mmapData struct {
 }
 
 // mmap maps the given file into memory.
-func mmap(file string) mmapData {
+func mmap(file string) (*mmapData, error) {
 	f, err := os.Open(file)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	return mmapFile(f)
 }

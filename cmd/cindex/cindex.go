@@ -66,8 +66,15 @@ func main() {
 	args := flag.Args()
 
 	if *listFlag {
-		ix := index.Open(index.File())
-		for _, arg := range ix.Paths() {
+		ix, err := index.Open(index.File())
+		if err != nil {
+			log.Fatal(err)
+		}
+		paths, err := ix.Paths()
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, arg := range paths {
 			fmt.Printf("%s\n", arg)
 		}
 		return
@@ -88,8 +95,15 @@ func main() {
 		return
 	}
 	if len(args) == 0 {
-		ix := index.Open(index.File())
-		for _, arg := range ix.Paths() {
+		ix, err := index.Open(index.File())
+		if err != nil {
+			log.Fatal(err)
+		}
+		paths, err := ix.Paths()
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, arg := range paths {
 			args = append(args, arg)
 		}
 	}
@@ -121,7 +135,10 @@ func main() {
 		file += "~"
 	}
 
-	ix := index.Create(file)
+	ix, err := index.Create(file)
+	if err != nil {
+		log.Fatal(err)
+	}
 	ix.Verbose = *verboseFlag
 	ix.AddPaths(args)
 	for _, arg := range args {
@@ -147,11 +164,15 @@ func main() {
 		})
 	}
 	log.Printf("flush index")
-	ix.Flush()
+	if err := ix.Flush(); err != nil {
+		log.Fatal(err)
+	}
 
 	if !*resetFlag {
 		log.Printf("merge %s %s", master, file)
-		index.Merge(file+"~", master, file)
+		if err := index.Merge(file+"~", master, file); err != nil {
+			log.Fatal(err)
+		}
 		os.Remove(file)
 		os.Rename(file+"~", master)
 	}

@@ -38,25 +38,40 @@ var mergeFiles2 = map[string]string{
 }
 
 func TestMerge(t *testing.T) {
-	f1, _ := ioutil.TempFile("", "index-test")
-	f2, _ := ioutil.TempFile("", "index-test")
-	f3, _ := ioutil.TempFile("", "index-test")
-	defer os.Remove(f1.Name())
-	defer os.Remove(f2.Name())
-	defer os.Remove(f3.Name())
+	tempFile := func() string {
+		f, err := ioutil.TempFile("", "index-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f.Name()
+	}
 
-	out1 := f1.Name()
-	out2 := f2.Name()
-	out3 := f3.Name()
+	out1 := tempFile()
+	out2 := tempFile()
+	out3 := tempFile()
+	defer os.Remove(out1)
+	defer os.Remove(out2)
+	defer os.Remove(out3)
 
-	buildIndex(out1, mergePaths1, mergeFiles1)
-	buildIndex(out2, mergePaths2, mergeFiles2)
+	buildIndex(t, out1, mergePaths1, mergeFiles1)
+	buildIndex(t, out2, mergePaths2, mergeFiles2)
 
-	Merge(out3, out1, out2)
+	if err := Merge(out3, out1, out2); err != nil {
+		t.Fatal(err)
+	}
 
-	ix1 := Open(out1)
-	ix2 := Open(out2)
-	ix3 := Open(out3)
+	ix1, err := Open(out1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix2, err := Open(out2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix3, err := Open(out3)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	nameof := func(ix *Index) string {
 		switch {
@@ -72,7 +87,10 @@ func TestMerge(t *testing.T) {
 
 	checkFiles := func(ix *Index, l ...string) {
 		for i, s := range l {
-			if n := ix.Name(uint32(i)); n != s {
+			n, err := ix.Name(uint32(i))
+			if err != nil {
+				t.Errorf("%s: Name(%d): %v", nameof(ix), i, err)
+			} else if n != s {
 				t.Errorf("%s: Name(%d) = %s, want %s", nameof(ix), i, n, s)
 			}
 		}
@@ -83,8 +101,10 @@ func TestMerge(t *testing.T) {
 	checkFiles(ix3, "/a/x", "/a/y", "/b/www", "/b/xx", "/b/yy", "/c/ab", "/c/de", "/cc")
 
 	check := func(ix *Index, trig string, l ...uint32) {
-		l1 := ix.PostingList(tri(trig[0], trig[1], trig[2]))
-		if !equalList(l1, l) {
+		l1, err := ix.PostingList(tri(trig[0], trig[1], trig[2]))
+		if err != nil {
+			t.Error(err)
+		} else if !equalList(l1, l) {
 			t.Errorf("PostingList(%s, %s) = %v, want %v", nameof(ix), trig, l1, l)
 		}
 	}

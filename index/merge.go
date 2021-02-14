@@ -26,7 +26,7 @@ package index
 // Now merge the posting lists (this is why they begin with the trigram).
 // During the merge, translate the docid numbers to the new C docid space.
 // Also during the merge, write the posting list index to a temporary file as usual.
-// 
+//
 // Copy the name index and posting list index into C's index and write the trailer.
 // Rename C's index onto the new index.
 
@@ -50,11 +50,23 @@ type postIndex struct {
 // Merge creates a new index in the file dst that corresponds to merging
 // the two indices src1 and src2.  If both src1 and src2 claim responsibility
 // for a path, src2 is assumed to be newer and is given preference.
-func Merge(dst, src1, src2 string) {
-	ix1 := Open(src1)
-	ix2 := Open(src2)
-	paths1 := ix1.Paths()
-	paths2 := ix2.Paths()
+func Merge(dst, src1, src2 string) error {
+	ix1, err := Open(src1)
+	if err != nil {
+		return err
+	}
+	ix2, err := Open(src2)
+	if err != nil {
+		return err
+	}
+	paths1, err := ix1.Paths()
+	if err != nil {
+		return err
+	}
+	paths2, err := ix2.Paths()
+	if err != nil {
+		return err
+	}
 
 	// Build docid maps.
 	var i1, i2, new uint32
@@ -62,12 +74,26 @@ func Merge(dst, src1, src2 string) {
 	for _, path := range paths2 {
 		// Determine range shadowed by this path.
 		old := i1
-		for i1 < uint32(ix1.numName) && ix1.Name(i1) < path {
+		for i1 < uint32(ix1.numName) {
+			name, err := ix1.Name(i1)
+			if err != nil {
+				return err
+			}
+			if name >= path {
+				break
+			}
 			i1++
 		}
 		lo := i1
 		limit := path[:len(path)-1] + string(path[len(path)-1]+1)
-		for i1 < uint32(ix1.numName) && ix1.Name(i1) < limit {
+		for i1 < uint32(ix1.numName) {
+			name, err := ix1.Name(i1)
+			if err != nil {
+				return err
+			}
+			if name >= limit {
+				break
+			}
 			i1++
 		}
 		hi := i1
@@ -81,11 +107,24 @@ func Merge(dst, src1, src2 string) {
 		// Determine range defined by this path.
 		// Because we are iterating over the ix2 paths,
 		// there can't be gaps, so it must start at i2.
-		if i2 < uint32(ix2.numName) && ix2.Name(i2) < path {
-			panic("merge: inconsistent index")
+		if i2 < uint32(ix2.numName) {
+			name, err := ix2.Name(i2)
+			if err != nil {
+				return err
+			}
+			if name < path {
+				panic("merge: inconsistent index")
+			}
 		}
 		lo = i2
-		for i2 < uint32(ix2.numName) && ix2.Name(i2) < limit {
+		for i2 < uint32(ix2.numName) {
+			name, err := ix2.Name(i2)
+			if err != nil {
+				return err
+			}
+			if name >= limit {
+				break
+			}
 			i2++
 		}
 		hi = i2
@@ -104,8 +143,13 @@ func Merge(dst, src1, src2 string) {
 	}
 	numName := new
 
-	ix3 := bufCreate(dst)
-	ix3.writeString(magic)
+	ix3, err := bufCreate(dst)
+	if err != nil {
+		return err
+	}
+	if err := ix3.writeString(magic); err != nil {
+		return err
+	}
 
 	// Merged list of paths.
 	pathData := ix3.offset()
@@ -125,33 +169,60 @@ func Merge(dst, src1, src2 string) {
 			continue
 		}
 		last = p
-		ix3.writeString(p)
-		ix3.writeString("\x00")
+		if err := ix3.writeString(p); err != nil {
+			return err
+		}
+		if err := ix3.writeString("\x00"); err != nil {
+			return err
+		}
 	}
-	ix3.writeString("\x00")
+	if err := ix3.writeString("\x00"); err != nil {
+		return err
+	}
 
 	// Merged list of names.
 	nameData := ix3.offset()
-	nameIndexFile := bufCreate("")
+	nameIndexFile, err := bufCreate("")
+	if err != nil {
+		return err
+	}
 	new = 0
 	mi1 = 0
 	mi2 = 0
 	for new < numName {
 		if mi1 < len(map1) && map1[mi1].new == new {
 			for i := map1[mi1].lo; i < map1[mi1].hi; i++ {
-				name := ix1.Name(i)
-				nameIndexFile.writeUint32(ix3.offset() - nameData)
-				ix3.writeString(name)
-				ix3.writeString("\x00")
+				name, err := ix1.Name(i)
+				if err != nil {
+					return err
+				}
+				if err := nameIndexFile.writeUint32(ix3.offset() - nameData); err != nil {
+					return err
+				}
+				if err := ix3.writeString(name); err != nil {
+					return err
+				}
+				if err := ix3.writeString("\x00"); err != nil {
+					return err
+				}
 				new++
 			}
 			mi1++
 		} else if mi2 < len(map2) && map2[mi2].new == new {
 			for i := map2[mi2].lo; i < map2[mi2].hi; i++ {
-				name := ix2.Name(i)
-				nameIndexFile.writeUint32(ix3.offset() - nameData)
-				ix3.writeString(name)
-				ix3.writeString("\x00")
+				name, err := ix2.Name(i)
+				if err != nil {
+					return err
+				}
+				if err := nameIndexFile.writeUint32(ix3.offset() - nameData); err != nil {
+					return err
+				}
+				if err := ix3.writeString(name); err != nil {
+					return err
+				}
+				if err := ix3.writeString("\x00"); err != nil {
+					return err
+				}
 				new++
 			}
 			mi2++
@@ -162,28 +233,54 @@ func Merge(dst, src1, src2 string) {
 	if new*4 != nameIndexFile.offset() {
 		panic("merge: inconsistent index")
 	}
-	nameIndexFile.writeUint32(ix3.offset())
+	if err := nameIndexFile.writeUint32(ix3.offset()); err != nil {
+		return err
+	}
 
 	// Merged list of posting lists.
 	postData := ix3.offset()
 	var r1 postMapReader
 	var r2 postMapReader
 	var w postDataWriter
-	r1.init(ix1, map1)
-	r2.init(ix2, map2)
-	w.init(ix3)
+	if err := r1.init(ix1, map1); err != nil {
+		return err
+	}
+	if err := r2.init(ix2, map2); err != nil {
+		return err
+	}
+	if err := w.init(ix3); err != nil {
+		return err
+	}
 	for {
 		if r1.trigram < r2.trigram {
 			w.trigram(r1.trigram)
-			for r1.nextId() {
-				w.fileid(r1.fileid)
+			for {
+				ok, err := r1.nextId()
+				if err != nil {
+					return err
+				}
+				if !ok {
+					break
+				}
+				if err := w.fileid(r1.fileid); err != nil {
+					return err
+				}
 			}
 			r1.nextTrigram()
 			w.endTrigram()
 		} else if r2.trigram < r1.trigram {
 			w.trigram(r2.trigram)
-			for r2.nextId() {
-				w.fileid(r2.fileid)
+			for {
+				ok, err := r2.nextId()
+				if err != nil {
+					return err
+				}
+				if !ok {
+					break
+				}
+				if err := w.fileid(r2.fileid); err != nil {
+					return err
+				}
 			}
 			r2.nextTrigram()
 			w.endTrigram()
@@ -196,18 +293,28 @@ func Merge(dst, src1, src2 string) {
 			r2.nextId()
 			for r1.fileid < ^uint32(0) || r2.fileid < ^uint32(0) {
 				if r1.fileid < r2.fileid {
-					w.fileid(r1.fileid)
+					if err := w.fileid(r1.fileid); err != nil {
+						return err
+					}
 					r1.nextId()
 				} else if r2.fileid < r1.fileid {
-					w.fileid(r2.fileid)
+					if err := w.fileid(r2.fileid); err != nil {
+						return err
+					}
 					r2.nextId()
 				} else {
 					panic("merge: inconsistent index")
 				}
 			}
-			r1.nextTrigram()
-			r2.nextTrigram()
-			w.endTrigram()
+			if err := r1.nextTrigram(); err != nil {
+				return err
+			}
+			if err := r2.nextTrigram(); err != nil {
+				return err
+			}
+			if err := w.endTrigram(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -219,16 +326,31 @@ func Merge(dst, src1, src2 string) {
 	postIndex := ix3.offset()
 	copyFile(ix3, w.postIndexFile)
 
-	ix3.writeUint32(pathData)
-	ix3.writeUint32(nameData)
-	ix3.writeUint32(postData)
-	ix3.writeUint32(nameIndex)
-	ix3.writeUint32(postIndex)
-	ix3.writeString(trailerMagic)
-	ix3.flush()
+	if err := ix3.writeUint32(pathData); err != nil {
+		return err
+	}
+	if err := ix3.writeUint32(nameData); err != nil {
+		return err
+	}
+	if err := ix3.writeUint32(postData); err != nil {
+		return err
+	}
+	if err := ix3.writeUint32(nameIndex); err != nil {
+		return err
+	}
+	if err := ix3.writeUint32(postIndex); err != nil {
+		return err
+	}
+	if err := ix3.writeString(trailerMagic); err != nil {
+		return err
+	}
+	if err := ix3.flush(); err != nil {
+		return err
+	}
 
 	os.Remove(nameIndexFile.name)
 	os.Remove(w.postIndexFile.name)
+	return nil
 }
 
 type postMapReader struct {
@@ -244,42 +366,47 @@ type postMapReader struct {
 	i       int
 }
 
-func (r *postMapReader) init(ix *Index, idmap []idrange) {
+func (r *postMapReader) init(ix *Index, idmap []idrange) error {
 	r.ix = ix
 	r.idmap = idmap
 	r.trigram = ^uint32(0)
-	r.load()
+	return r.load()
 }
 
-func (r *postMapReader) nextTrigram() {
+func (r *postMapReader) nextTrigram() error {
 	r.triNum++
-	r.load()
+	return r.load()
 }
 
-func (r *postMapReader) load() {
+func (r *postMapReader) load() error {
 	if r.triNum >= uint32(r.ix.numPost) {
 		r.trigram = ^uint32(0)
 		r.count = 0
 		r.fileid = ^uint32(0)
-		return
+		return nil
 	}
-	r.trigram, r.count, r.offset = r.ix.listAt(r.triNum * postEntrySize)
+	var err error
+	r.trigram, r.count, r.offset, err = r.ix.listAt(r.triNum * postEntrySize)
+	if err != nil {
+		return err
+	}
 	if r.count == 0 {
 		r.fileid = ^uint32(0)
-		return
+		return nil
 	}
-	r.d = r.ix.slice(r.ix.postData+r.offset+3, -1)
+	r.d, err = r.ix.slice(r.ix.postData+r.offset+3, -1)
 	r.oldid = ^uint32(0)
 	r.i = 0
+	return err
 }
 
-func (r *postMapReader) nextId() bool {
+func (r *postMapReader) nextId() (bool, error) {
 	for r.count > 0 {
 		r.count--
 		delta64, n := binary.Uvarint(r.d)
 		delta := uint32(delta64)
 		if n <= 0 || delta == 0 {
-			corrupt()
+			return false, corrupt()
 		}
 		r.d = r.d[n:]
 		r.oldid += delta
@@ -294,11 +421,11 @@ func (r *postMapReader) nextId() bool {
 			continue
 		}
 		r.fileid = r.idmap[r.i].new + r.oldid - r.idmap[r.i].lo
-		return true
+		return true, nil
 	}
 
 	r.fileid = ^uint32(0)
-	return false
+	return false, nil
 }
 
 type postDataWriter struct {
@@ -311,10 +438,15 @@ type postDataWriter struct {
 	t             uint32
 }
 
-func (w *postDataWriter) init(out *bufWriter) {
+func (w *postDataWriter) init(out *bufWriter) error {
+	b, err := bufCreate("")
+	if err != nil {
+		return err
+	}
 	w.out = out
-	w.postIndexFile = bufCreate("")
+	w.postIndexFile = b
 	w.base = out.offset()
+	return nil
 }
 
 func (w *postDataWriter) trigram(t uint32) {
@@ -324,21 +456,32 @@ func (w *postDataWriter) trigram(t uint32) {
 	w.last = ^uint32(0)
 }
 
-func (w *postDataWriter) fileid(id uint32) {
+func (w *postDataWriter) fileid(id uint32) error {
 	if w.count == 0 {
-		w.out.writeTrigram(w.t)
+		if err := w.out.writeTrigram(w.t); err != nil {
+			return err
+		}
 	}
-	w.out.writeUvarint(id - w.last)
+	if err := w.out.writeUvarint(id - w.last); err != nil {
+		return err
+	}
 	w.last = id
 	w.count++
+	return nil
 }
 
-func (w *postDataWriter) endTrigram() {
+func (w *postDataWriter) endTrigram() error {
 	if w.count == 0 {
-		return
+		return nil
 	}
-	w.out.writeUvarint(0)
-	w.postIndexFile.writeTrigram(w.t)
-	w.postIndexFile.writeUint32(w.count)
-	w.postIndexFile.writeUint32(w.offset - w.base)
+	if err := w.out.writeUvarint(0); err != nil {
+		return err
+	}
+	if err := w.postIndexFile.writeTrigram(w.t); err != nil {
+		return err
+	}
+	if err := w.postIndexFile.writeUint32(w.count); err != nil {
+		return err
+	}
+	return w.postIndexFile.writeUint32(w.offset - w.base)
 }

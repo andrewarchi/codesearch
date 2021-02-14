@@ -433,7 +433,7 @@ func (g *Grep) Reader(r io.Reader, name string) {
 			}
 			g.Match = true
 			if g.L {
-				fmt.Fprintf(g.Stdout, "%s\n", name)
+				fmt.Fprintln(g.Stdout, name)
 				return
 			}
 			lineStart := bytes.LastIndex(buf[chunkStart:m1], nl) + 1 + chunkStart

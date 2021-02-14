@@ -25,26 +25,28 @@ func TestTrivialPosting(t *testing.T) {
 	f, _ := ioutil.TempFile("", "index-test")
 	defer os.Remove(f.Name())
 	out := f.Name()
-	buildIndex(out, nil, postFiles)
-	ix := Open(out)
-	if l := ix.PostingList(tri('S', 'e', 'a')); !equalList(l, []uint32{1, 3}) {
-		t.Errorf("PostingList(Sea) = %v, want [1 3]", l)
+	buildIndex(t, out, nil, postFiles)
+	ix, err := Open(out)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if l := ix.PostingList(tri('G', 'o', 'o')); !equalList(l, []uint32{1, 2, 3}) {
-		t.Errorf("PostingList(Goo) = %v, want [1 2 3]", l)
+
+	checkPosting := func(label string, want []uint32) func([]uint32, error) {
+		return func(got []uint32, err error) {
+			if err != nil {
+				t.Errorf("PostingList(%s): %v", label, err)
+			} else if !equalList(got, want) {
+				t.Errorf("PostingList(%s) = %v, want %v", label, got, want)
+			}
+		}
 	}
-	if l := ix.PostingAnd(ix.PostingList(tri('S', 'e', 'a')), tri('G', 'o', 'o')); !equalList(l, []uint32{1, 3}) {
-		t.Errorf("PostingList(Sea&Goo) = %v, want [1 3]", l)
-	}
-	if l := ix.PostingAnd(ix.PostingList(tri('G', 'o', 'o')), tri('S', 'e', 'a')); !equalList(l, []uint32{1, 3}) {
-		t.Errorf("PostingList(Goo&Sea) = %v, want [1 3]", l)
-	}
-	if l := ix.PostingOr(ix.PostingList(tri('S', 'e', 'a')), tri('G', 'o', 'o')); !equalList(l, []uint32{1, 2, 3}) {
-		t.Errorf("PostingList(Sea|Goo) = %v, want [1 2 3]", l)
-	}
-	if l := ix.PostingOr(ix.PostingList(tri('G', 'o', 'o')), tri('S', 'e', 'a')); !equalList(l, []uint32{1, 2, 3}) {
-		t.Errorf("PostingList(Goo|Sea) = %v, want [1 2 3]", l)
-	}
+
+	checkPosting("Sea", []uint32{1, 3})(ix.PostingList(tri('S', 'e', 'a')))
+	checkPosting("Goo", []uint32{1, 2, 3})(ix.PostingList(tri('G', 'o', 'o')))
+	checkPosting("Sea&Goo", []uint32{1, 3})(ix.PostingAnd([]uint32{1, 3}, tri('G', 'o', 'o')))
+	checkPosting("Goo&Sea", []uint32{1, 3})(ix.PostingAnd([]uint32{1, 2, 3}, tri('S', 'e', 'a')))
+	checkPosting("Sea|Goo", []uint32{1, 2, 3})(ix.PostingOr([]uint32{1, 3}, tri('G', 'o', 'o')))
+	checkPosting("Goo|Sea", []uint32{1, 2, 3})(ix.PostingOr([]uint32{1, 2, 3}, tri('S', 'e', 'a')))
 }
 
 func equalList(x, y []uint32) bool {

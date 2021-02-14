@@ -5,33 +5,33 @@
 package index
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
 )
 
-func mmapFile(f *os.File) mmapData {
+func mmapFile(f *os.File) (*mmapData, error) {
 	st, err := f.Stat()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	size := st.Size()
 	if int64(int(size+4095)) != size+4095 {
-		log.Fatalf("%s: too large for mmap", f.Name())
+		return nil, fmt.Errorf("%s: too large for mmap", f.Name())
 	}
 	if size == 0 {
-		return mmapData{f, nil}
+		return &mmapData{f, nil}, nil
 	}
 	h, err := syscall.CreateFileMapping(syscall.Handle(f.Fd()), nil, syscall.PAGE_READONLY, uint32(size>>32), uint32(size), nil)
 	if err != nil {
-		log.Fatalf("CreateFileMapping %s: %v", f.Name(), err)
+		return nil, fmt.Errorf("CreateFileMapping %s: %w", f.Name(), err)
 	}
 
 	addr, err := syscall.MapViewOfFile(h, syscall.FILE_MAP_READ, 0, 0, 0)
 	if err != nil {
-		log.Fatalf("MapViewOfFile %s: %v", f.Name(), err)
+		return nil, fmt.Errorf("MapViewOfFile %s: %w", f.Name(), err)
 	}
 	data := (*[1 << 30]byte)(unsafe.Pointer(addr))
-	return mmapData{f, data[:size]}
+	return &mmapData{f, data[:size]}, nil
 }
