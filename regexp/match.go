@@ -403,13 +403,13 @@ func (g *Grep) Reader(r io.Reader, name string) {
 		g.buf = make([]byte, 1<<20)
 	}
 	var (
-		buf        = g.buf[:0]
-		needLineno = g.N
-		lineno     = 1
-		count      = 0
-		prefix     = ""
-		beginText  = true
-		endText    = false
+		buf         = g.buf[:0]
+		needLineNum = g.N
+		lineNum     = 1
+		count       = 0
+		prefix      = ""
+		beginText   = true
+		endText     = false
 	)
 	if !g.H {
 		prefix = name + ":"
@@ -447,8 +447,8 @@ func (g *Grep) Reader(r io.Reader, name string) {
 			if lineEnd > end {
 				lineEnd = end
 			}
-			if needLineno {
-				lineno += countNL(buf[chunkStart:lineStart])
+			if needLineNum {
+				lineNum += countNL(buf[chunkStart:lineStart])
 			}
 			line := buf[lineStart:lineEnd]
 			nl := ""
@@ -459,17 +459,17 @@ func (g *Grep) Reader(r io.Reader, name string) {
 			case g.C:
 				count++
 			case g.N:
-				fmt.Fprintf(g.Stdout, "%s%d:%s%s", prefix, lineno, line, nl)
+				fmt.Fprintf(g.Stdout, "%s%d:%s%s", prefix, lineNum, line, nl)
 			default:
 				fmt.Fprintf(g.Stdout, "%s%s%s", prefix, line, nl)
 			}
-			if needLineno {
-				lineno++
+			if needLineNum {
+				lineNum++
 			}
 			chunkStart = lineEnd
 		}
-		if needLineno && err == nil {
-			lineno += countNL(buf[chunkStart:end])
+		if needLineNum && err == nil {
+			lineNum += countNL(buf[chunkStart:end])
 		}
 		n = copy(buf, buf[end:])
 		buf = buf[:n]

@@ -151,9 +151,9 @@ func main() {
 	for _, arg := range args {
 		log.Printf("index %s", arg)
 		err := filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
-			if _, elem := filepath.Split(path); elem != "" {
+			if base := filepath.Base(path); base != "" {
 				// Skip various temporary or "hidden" files or directories.
-				if elem[0] == '.' || elem[0] == '#' || elem[0] == '~' || elem[len(elem)-1] == '~' {
+				if base[0] == '.' || base[0] == '#' || base[0] == '~' || base[len(base)-1] == '~' {
 					if info.IsDir() {
 						return filepath.SkipDir
 					}
@@ -166,7 +166,13 @@ func main() {
 			}
 			// Avoid symlinks.
 			if info != nil && info.Mode()&os.ModeType == 0 {
-				return ix.AddFile(path)
+				if err := ix.AddFile(path); err != nil {
+					if os.IsPermission(err) {
+						log.Printf("%s: %s", path, err)
+						return nil
+					}
+					return err
+				}
 			}
 			return nil
 		})
