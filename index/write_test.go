@@ -6,7 +6,6 @@ package index
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -140,12 +139,12 @@ func buildIndex(t *testing.T, name string, paths []string, fileData map[string]s
 }
 
 func testTrivialWrite(t *testing.T, doFlush bool) {
-	f, _ := ioutil.TempFile("", "index-test")
+	f, _ := os.CreateTemp("", "index-test")
 	defer os.Remove(f.Name())
 	out := f.Name()
 	buildFlushIndex(t, out, nil, doFlush, trivialFiles)
 
-	data, err := ioutil.ReadFile(out)
+	data, err := os.ReadFile(out)
 	if err != nil {
 		t.Fatalf("reading _test/index.triv: %v", err)
 	}

@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -149,7 +150,7 @@ func main() {
 	ix.AddPaths(args)
 	for _, arg := range args {
 		log.Printf("index %s", arg)
-		err := filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
+		err := filepath.WalkDir(arg, func(path string, info fs.DirEntry, err error) error {
 			if defaultSkip(path) {
 				if info.IsDir() {
 					return filepath.SkipDir
@@ -161,7 +162,7 @@ func main() {
 				return nil
 			}
 			// Avoid symlinks.
-			if info == nil || info.Mode()&os.ModeType != 0 {
+			if info == nil || info.Type() != 0 {
 				return nil
 			}
 			err = ix.AddFile(path)

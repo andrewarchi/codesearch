@@ -5,7 +5,6 @@
 package index
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -39,7 +38,7 @@ var mergeFiles2 = map[string]string{
 
 func TestMerge(t *testing.T) {
 	tempFile := func() string {
-		f, err := ioutil.TempFile("", "index-test")
+		f, err := os.CreateTemp("", "index-test")
 		if err != nil {
 			t.Fatal(err)
 		}

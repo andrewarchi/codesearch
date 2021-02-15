@@ -7,7 +7,6 @@ package index
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -305,7 +304,7 @@ func (ix *Writer) addName(name string) (uint32, error) {
 // flushPost writes ix.post to a new temporary file and
 // clears the slice.
 func (ix *Writer) flushPost() error {
-	w, err := ioutil.TempFile("", "csearch-index")
+	w, err := os.CreateTemp("", "csearch-index")
 	if err != nil {
 		return err
 	}
@@ -539,7 +538,7 @@ func bufCreate(name string) (*bufWriter, error) {
 	if name != "" {
 		f, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	} else {
-		f, err = ioutil.TempFile("", "csearch")
+		f, err = os.CreateTemp("", "csearch")
 	}
 	if err != nil {
 		return nil, err
