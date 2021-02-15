@@ -15,6 +15,7 @@ import (
 	"sort"
 
 	"github.com/andrewarchi/codesearch/index"
+	"github.com/andrewarchi/codesearch/walk"
 )
 
 var usageMessage = `usage: cindex [-list] [-reset] [-index path] [path...]
@@ -150,7 +151,7 @@ func main() {
 	ix.AddPaths(args)
 	for _, arg := range args {
 		log.Printf("index %s", arg)
-		err := filepath.WalkDir(arg, func(path string, info fs.DirEntry, err error) error {
+		err := walk.Walk(os.DirFS("/"), arg, func(path string, info fs.DirEntry, err error) error {
 			if defaultSkip(path) {
 				if info.IsDir() {
 					return filepath.SkipDir
