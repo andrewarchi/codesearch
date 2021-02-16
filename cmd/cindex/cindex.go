@@ -180,7 +180,7 @@ func main() {
 			}
 			err = ix.AddFile(path)
 			if errors.Is(err, fs.ErrPermission) {
-				log.Printf("%s: %s", path, err)
+				log.Println(err)
 				return nil
 			}
 			return err

@@ -159,19 +159,19 @@ func (ix *Writer) Add(name string, f io.Reader) error {
 		}
 		if !validUTF8((tv>>8)&0xFF, tv&0xFF) {
 			if ix.LogSkip {
-				log.Printf("%s:%d: invalid UTF-8, ignoring\n", name, lineNum)
+				log.Printf("skipped %s:%d: invalid UTF-8\n", name, lineNum)
 			}
 			return nil
 		}
 		if n > maxFileLen {
 			if ix.LogSkip {
-				log.Printf("%s: file too long (over %d bytes), ignoring\n", name, maxFileLen)
+				log.Printf("skipped %s: file too long (over %d bytes)\n", name, maxFileLen)
 			}
 			return nil
 		}
 		if lineLen++; lineLen > maxLineLen {
 			if ix.LogSkip {
-				log.Printf("%s:%d: line too long (over %d bytes), ignoring\n", name, lineNum, maxLineLen)
+				log.Printf("skipped %s:%d: line too long (over %d bytes)\n", name, lineNum, maxLineLen)
 			}
 			return nil
 		}

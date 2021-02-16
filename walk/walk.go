@@ -5,16 +5,21 @@
 package walk
 
 import (
-	"fmt"
+	"bufio"
+	"errors"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 )
 
-// Copied from Go's io/fs:walk.go.
+// Modified from Go's filepath.WalkDir in path/filepath/path.go.
+// filepath.WalkDir does not visit directories after its entries have
+// been traversed, so a custom implementation is needed.
 
 // SkipDir is used as a return value from a walk.Func to indicate that
 // the directory named in the call is to be skipped. It is not returned
@@ -23,50 +28,32 @@ var SkipDir = fs.SkipDir
 
 // Func is the type of the function called by Walk to visit each file
 // or directory.
-//
-// The path argument contains the argument to Walk as a prefix.
-// That is, if Walk is called with root argument "dir" and finds a file
-// named "a" in that directory, the walk function will be called with
-// argument "dir/a".
-//
-// The d argument is the fs.DirEntry for the named path.
-//
-// The error result returned by the function controls how Walk
-// continues. If the function returns the special value SkipDir, Walk
-// skips the current directory (path if d.IsDir() is true, otherwise
-// path's parent directory). Otherwise, if the function returns a
-// non-nil error, Walk stops entirely and returns that error.
-//
-// The err argument reports an error related to path, signaling that
-// Walk will not walk into that directory. The function can decide how
-// to handle that error; as described earlier, returning the error will
-// cause Walk to stop walking the entire tree.
-//
-// Walk calls the function with a non-nil err argument in two cases.
-//
-// First, if the initial fs.Stat on the root directory fails, Walk
-// calls the function with path set to root, d set to nil, and err set
-// to the error from fs.Stat.
-//
-// Second, if a directory's ReadDir method fails, Walk calls the
-// function with path set to the directory's path, d set to an
-// fs.DirEntry describing the directory, and err set to the error from
-// ReadDir. In this second case, the function is called twice with the
-// path of the directory: the first call is before the directory read is
-// attempted and has err set to nil, giving the function a chance to
-// return SkipDir and avoid the ReadDir entirely. The second call is
-// after a failed ReadDir and reports the error from ReadDir.
-// (If ReadDir succeeds, there is no second call.)
-//
-// The differences between Func compared to filepath.Func are:
-//
-//   - The second argument has type fs.DirEntry instead of fs.FileInfo.
-//   - The function is called before reading a directory, to allow
-//     SkipDir to bypass the directory read entirely.
-//   - If a directory read fails, the function is called a second time
-//     for that directory to report the error.
-//
-type Func func(path string, d fs.DirEntry, err error) error
+type Func = fs.WalkDirFunc
+
+type Walker interface {
+	Walk(root string, fn Func) error
+}
+
+type walker struct{}
+
+func NewWalker() Walker { return walker{} }
+
+func (w walker) Walk(root string, fn Func) error {
+	return filepath.WalkDir(root, fn)
+}
+
+type gitignoreWalker struct {
+	ps []gitignore.Pattern
+	m  gitignore.Matcher
+}
+
+func NewGitignoreWalker() (Walker, error) {
+	var w gitignoreWalker
+	if err := w.loadGlobalGitignore(); err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
 
 // walk recursively descends path, calling walkFn.
 func (w *gitignoreWalker) walk(path string, pathSplit []string, d fs.DirEntry, walkFn Func) error {
@@ -89,7 +76,7 @@ func (w *gitignoreWalker) walk(path string, pathSplit []string, d fs.DirEntry, w
 	l := len(w.ps)
 	err = w.readGitignore(path, pathSplit)
 	if err != nil {
-		// Third call, to report push error.
+		// Third call, to report readGitignore error.
 		if err := walkFn(path, d, err); err != nil {
 			return err
 		}
@@ -97,12 +84,13 @@ func (w *gitignoreWalker) walk(path string, pathSplit []string, d fs.DirEntry, w
 
 	for _, d1 := range dirs {
 		name := d1.Name()
+		path1 := filepath.Join(path, name)
 		pathSplit1 := append(pathSplit, name)
 		if w.m.Match(pathSplit1, d1.IsDir()) {
-			fmt.Println("skipped", name)
+			// TODO log only on -logskip
+			log.Printf("skipped %s: excluded in gitignore\n", path1)
 			continue
 		}
-		path1 := filepath.Join(path, name)
 		if err := w.walk(path1, pathSplit1, d1, walkFn); err != nil {
 			if err == SkipDir {
 				break
@@ -111,26 +99,11 @@ func (w *gitignoreWalker) walk(path string, pathSplit []string, d fs.DirEntry, w
 		}
 	}
 
-	// Pop the gitignore from this dir.
+	// Pop the gitignore patterns when backing out of this dir. go-git
+	// already checks whether a file is within scope of a gitignore, but
+	// this saves extra checks when many gitignores have been read.
 	w.ps = w.ps[:l]
 	return nil
-}
-
-type gitignoreWalker struct {
-	ps []gitignore.Pattern
-	m  gitignore.Matcher
-}
-
-type Walker interface {
-	Walk(root string, fn Func) error
-}
-
-func NewGitignoreWalker() (Walker, error) {
-	var w gitignoreWalker
-	if err := w.loadGlobalGitignore(); err != nil {
-		return nil, err
-	}
-	return &w, nil
 }
 
 // Walk walks the file tree rooted at root, calling fn for each file or
@@ -167,10 +140,51 @@ func (d *statDirEntry) IsDir() bool                { return d.info.IsDir() }
 func (d *statDirEntry) Type() fs.FileMode          { return d.info.Mode().Type() }
 func (d *statDirEntry) Info() (fs.FileInfo, error) { return d.info, nil }
 
+// split splits a path into names separated by os.PathSeparator.
 func split(path string) []string {
 	sep := string(os.PathSeparator)
 	if path == sep {
 		return []string{}
 	}
 	return strings.Split(strings.TrimPrefix(path, sep), sep)
+}
+
+func (w *gitignoreWalker) loadGlobalGitignore() error {
+	fsys := osfs.New("/")
+	system, err := gitignore.LoadSystemPatterns(fsys)
+	if err != nil {
+		return err
+	}
+	global, err := gitignore.LoadGlobalPatterns(fsys)
+	if err != nil {
+		return err
+	}
+	ps := global
+	if len(system) != 0 {
+		ps = append(system, global...)
+	}
+	w.ps = ps
+	w.m = gitignore.NewMatcher(ps)
+	return nil
+}
+
+// readGitignore reads a specific git ignore file.
+func (w *gitignoreWalker) readGitignore(path string, pathSplit []string) error {
+	f, err := os.Open(filepath.Join(path, ".gitignore"))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) {
+			err = nil
+		}
+		return err
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		line := s.Text()
+		if !strings.HasPrefix(line, "#") && len(strings.TrimSpace(line)) > 0 {
+			w.ps = append(w.ps, gitignore.ParsePattern(line, pathSplit))
+		}
+	}
+	w.m = gitignore.NewMatcher(w.ps)
+	return s.Err()
 }
