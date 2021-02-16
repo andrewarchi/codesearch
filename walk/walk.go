@@ -88,7 +88,7 @@ func (w *gitignoreWalker) walk(path string, pathSplit []string, d fs.DirEntry, w
 		pathSplit1 := append(pathSplit, name)
 		if w.m.Match(pathSplit1, d1.IsDir()) {
 			// TODO log only on -logskip
-			log.Printf("skipped %s: excluded in gitignore\n", path1)
+			log.Printf("skipped %s: excluded by gitignore\n", path1)
 			continue
 		}
 		if err := w.walk(path1, pathSplit1, d1, walkFn); err != nil {

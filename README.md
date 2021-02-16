@@ -23,10 +23,12 @@ June 2015
 
 This fork introduces a number of features and bug fixes.
 
-- Skips files excluded by local, global, and system gitignores
+- Skips files excluded by local, global, and system .gitignore files
 - Improves usage as library:
   - Adds `regexp.CompileFlags`
   - Adds `(*index.Index).NumNames` ([evanj]) and `(*index.Index).Names`
+- Searches current working directory and parent dirs for a
+  .csearchindex file ([tomnomnom])
 - Adds flags to `cindex`:
   - `-index` path to the index ([taliesinb])
   - `-nogitignore` do not skip files in .gitignore
@@ -37,5 +39,6 @@ This fork introduces a number of features and bug fixes.
   - `-0` null delimit file names ([taliesinb])
 - Updates build scripts for current Go tools
 
-[evanj]: https://github.com/evanj/codesearch
+[evanj]:     https://github.com/evanj/codesearch
 [taliesinb]: https://github.com/taliesinb/codesearch
+[tomnomnom]: https://github.com/tomnomnom/codesearch

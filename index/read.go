@@ -528,12 +528,28 @@ func mmap(file string) (*mmapData, error) {
 }
 
 // File returns the name of the index file to use.
-// It is either $CSEARCHINDEX or $HOME/.csearchindex.
+// It is at $CSEARCHINDEX, the current working directory or a parent
+// directory, or $HOME/.csearchindex.
 func File() string {
-	f := os.Getenv("CSEARCHINDEX")
-	if f != "" {
+	if f := os.Getenv("CSEARCHINDEX"); f != "" {
 		return f
 	}
+
+	cwd, err := os.Getwd()
+	if err == nil {
+		for {
+			f := filepath.Join(cwd, ".csearchindex")
+			if _, err := os.Lstat(f); err == nil {
+				return f
+			}
+			parent := filepath.Dir(cwd)
+			if parent == cwd {
+				break
+			}
+			cwd = parent
+		}
+	}
+
 	var home string
 	home = os.Getenv("HOME")
 	if runtime.GOOS == "windows" && home == "" {

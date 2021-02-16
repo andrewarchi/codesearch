@@ -21,9 +21,12 @@ import (
 
 var usageMessage = `usage: cindex [-list] [-reset] [-index path] [path...]
 
-cindex prepares the trigram index for use by csearch. The index is the
-file named by the -index flag or $CSEARCHINDEX variable. If both are
-empty, the index path defaults to ~/.csearchindex.
+cindex prepares a trigram index for use by csearch.
+
+The path to the index is named by the -index flag or $CSEARCHINDEX
+variable. If both are empty, the current working directory and parents
+are recursively searched for a .csearchindex file. If none is found, an
+index is created at ~/.csearchindex.
 
 The simplest invocation is
 

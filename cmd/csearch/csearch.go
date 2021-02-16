@@ -21,24 +21,27 @@ var usageMessage = `usage: csearch [-c] [-f fileregexp] [-index path] [-h] [-i] 
 csearch behaves like grep over all indexed files, searching for regexp,
 an RE2 (nearly PCRE) regular expression.
 
-The -c, -h, -i, -l, and -n flags are as in grep, although note that as per Go's
-flag parsing convention, they cannot be combined: the option pair -i -n
-cannot be abbreviated to -in.
+The -c, -h, -i, -l, and -n flags are as in grep, although note that as
+per Go's flag parsing convention, they cannot be combined: the option
+pair -i -n cannot be abbreviated to -in.
 
-The -f flag restricts the search to files whose names match the RE2 regular
-expression fileregexp.
+The -f flag restricts the search to files whose names match the RE2
+regular expression fileregexp.
 
-csearch relies on the existence of an up-to-date index created ahead of time.
-To build or rebuild the index that csearch uses, run:
+csearch relies on the existence of an up-to-date index created ahead of
+time. To build or rebuild the index that csearch uses, run:
 
 	cindex path...
 
-where path... is a list of directories or individual files to be included in the index.
-If no index exists, this command creates one. If an index already exists, cindex
-overwrites it. Run cindex -help for more.
+where path... is a list of directories or individual files to be
+included in the index. If no index exists, this command creates one.
+If an index already exists, cindex overwrites it. Run cindex -help for
+more.
 
-csearch uses the index file named by the -index flag or $CSEARCHINDEX variable.
-If both are empty, the index path defaults to ~/.csearchindex.
+The path to the index is named by the -index flag or $CSEARCHINDEX
+variable. If both are empty, the current working directory and parents
+are recursively searched for a .csearchindex file. If none is found, an
+index is created at ~/.csearchindex.
 `
 
 func usage() {
