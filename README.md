@@ -25,10 +25,11 @@ This fork introduces a number of features and bug fixes.
 
 - Skips files excluded by local, global, and system .gitignore files
 - Improves usage as library:
+  - Returns error values, rather than exiting, to give control to caller
   - Adds `regexp.CompileFlags`
   - Adds `(*index.Index).NumNames` ([evanj]) and `(*index.Index).Names`
-- Searches current working directory and parent dirs for a
-  .csearchindex file ([tomnomnom])
+- Searches current working directory and parents for a .csearchindex
+  file ([tomnomnom])
 - Adds flags to `cindex`:
   - `-index` path to the index ([taliesinb])
   - `-nogitignore` do not skip files in .gitignore

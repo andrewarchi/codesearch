@@ -1,4 +1,4 @@
-GO := go1.16rc1
+GO := go
 TARGETS := linux/amd64 linux/386 freebsd/amd64 freebsd/386 \
 	windows/amd64 windows/386 darwin/amd64
 
