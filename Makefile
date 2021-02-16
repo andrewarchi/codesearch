@@ -2,10 +2,13 @@ GO := go1.16rc1
 TARGETS := linux/amd64 linux/386 freebsd/amd64 freebsd/386 \
 	windows/amd64 windows/386 darwin/amd64
 
+.PHONY: install
+install:
+	${GO} install ./...
+
 .PHONY: native
 native:
-	@mkdir -p bin
-	${GO} build -o bin/ github.com/andrewarchi/codesearch/cmd/{cgrep,cindex,csearch}
+	${GO} build -o bin/ ./...
 
 .PHONY: release
 release: $(TARGETS)
@@ -24,10 +27,6 @@ lint:
 .PHONY: vet
 vet:
 	${GO} vet ./...
-
-.PHONY: install
-install:
-	${GO} install ./...
 
 .PHONY: clean
 clean:

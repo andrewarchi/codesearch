@@ -130,13 +130,20 @@ func main() {
 		args = args[1:]
 	}
 
-	primary := *indexFlag
-	if primary == "" {
+	var primary string
+	if *indexFlag != "" {
+		primary = *indexFlag
+		if fi, err := os.Stat(primary); err == nil && fi.IsDir() {
+			primary = filepath.Join(primary, ".csearchindex")
+		}
+	} else {
 		primary = index.File()
 	}
-	if _, err := os.Stat(primary); err != nil {
+	if fi, err := os.Stat(primary); err != nil {
 		// Does not exist.
 		*resetFlag = true
+	} else if fi.IsDir() {
+		log.Fatalf("index %s: path is a directory", primary)
 	}
 	file := primary
 	if !*resetFlag {
