@@ -58,12 +58,13 @@ func usage() {
 }
 
 var (
-	listFlag    = flag.Bool("list", false, "list indexed paths and exit")
-	resetFlag   = flag.Bool("reset", false, "discard existing index")
-	indexFlag   = flag.String("index", "", "path to the index")
-	logSkipFlag = flag.Bool("logskip", false, "log skipped files")
-	verboseFlag = flag.Bool("verbose", false, "print extra information")
-	cpuProfile  = flag.String("cpuprofile", "", "write cpu profile to this file")
+	listFlag        = flag.Bool("list", false, "list indexed paths and exit")
+	resetFlag       = flag.Bool("reset", false, "discard existing index")
+	indexFlag       = flag.String("index", "", "path to the index")
+	noGitignoreFlag = flag.Bool("nogitignore", false, "do not skip files in .gitignore")
+	logSkipFlag     = flag.Bool("logskip", false, "log skipped files")
+	verboseFlag     = flag.Bool("verbose", false, "print extra information")
+	cpuProfile      = flag.String("cpuprofile", "", "write cpu profile to this file")
 )
 
 func main() {
@@ -157,9 +158,14 @@ func main() {
 	ix.LogSkip = *logSkipFlag || *verboseFlag
 	ix.Verbose = *verboseFlag
 	ix.AddPaths(args)
-	w, err := walk.NewGitignoreWalker()
-	if err != nil {
-		log.Fatal(err)
+	var w walk.Walker
+	if *noGitignoreFlag {
+		w = walk.NewWalker()
+	} else {
+		w, err = walk.NewGitignoreWalker()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	for _, arg := range args {
 		log.Printf("index %s", arg)

@@ -149,6 +149,8 @@ func split(path string) []string {
 	return strings.Split(strings.TrimPrefix(path, sep), sep)
 }
 
+// loadGlobalGitignore reads the gitignore files specified in
+// /etc/gitconfig and ~/.gitconfig, if they exist.
 func (w *gitignoreWalker) loadGlobalGitignore() error {
 	fsys := osfs.New("/")
 	system, err := gitignore.LoadSystemPatterns(fsys)
@@ -168,7 +170,8 @@ func (w *gitignoreWalker) loadGlobalGitignore() error {
 	return nil
 }
 
-// readGitignore reads a specific git ignore file.
+// readGitignore reads the gitignore file in the given directory, if it
+// exists.
 func (w *gitignoreWalker) readGitignore(path string, pathSplit []string) error {
 	f, err := os.Open(filepath.Join(path, ".gitignore"))
 	if err != nil {

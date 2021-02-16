@@ -1,3 +1,5 @@
+# Code Search
+
 Code Search is a tool for indexing and then performing
 regular expression searches over large bodies of source code.
 It is a set of command-line programs written in Go.
@@ -7,9 +9,11 @@ see http://swtch.com/~rsc/regexp/regexp4.html.
 
 To install:
 
-	go get github.com/andrewarchi/codesearch/cmd/...
+```sh
+go get github.com/andrewarchi/codesearch/cmd/...
+```
 
-Use "go get -u" to update an existing installation.
+Use `go get -u` to update an existing installation.
 
 Russ Cox
 rsc@swtch.com
