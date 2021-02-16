@@ -5,8 +5,13 @@
 package walk
 
 import (
+	"fmt"
 	"io/fs"
-	"path"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 )
 
 // Copied from Go's io/fs:walk.go.
@@ -64,8 +69,8 @@ var SkipDir = fs.SkipDir
 type Func func(path string, d fs.DirEntry, err error) error
 
 // walk recursively descends path, calling walkFn.
-func walk(fsys fs.FS, name string, d fs.DirEntry, walkFn Func) error {
-	if err := walkFn(name, d, nil); err != nil || !d.IsDir() {
+func (w *gitignoreWalker) walk(path string, pathSplit []string, d fs.DirEntry, walkFn Func) error {
+	if err := walkFn(path, d, nil); err != nil || !d.IsDir() {
 		if err == SkipDir && d.IsDir() {
 			// Successfully skipped directory.
 			err = nil
@@ -73,25 +78,59 @@ func walk(fsys fs.FS, name string, d fs.DirEntry, walkFn Func) error {
 		return err
 	}
 
-	dirs, err := fs.ReadDir(fsys, name)
+	dirs, err := os.ReadDir(path)
 	if err != nil {
 		// Second call, to report ReadDir error.
-		err = walkFn(name, d, err)
-		if err != nil {
+		if err := walkFn(path, d, err); err != nil {
+			return err
+		}
+	}
+
+	l := len(w.ps)
+	err = w.readGitignore(path, pathSplit)
+	if err != nil {
+		// Third call, to report push error.
+		if err := walkFn(path, d, err); err != nil {
 			return err
 		}
 	}
 
 	for _, d1 := range dirs {
-		name1 := path.Join(name, d1.Name())
-		if err := walk(fsys, name1, d1, walkFn); err != nil {
+		name := d1.Name()
+		pathSplit1 := append(pathSplit, name)
+		if w.m.Match(pathSplit1, d1.IsDir()) {
+			fmt.Println("skipped", name)
+			continue
+		}
+		path1 := filepath.Join(path, name)
+		if err := w.walk(path1, pathSplit1, d1, walkFn); err != nil {
 			if err == SkipDir {
 				break
 			}
 			return err
 		}
 	}
+
+	// Pop the gitignore from this dir.
+	w.ps = w.ps[:l]
 	return nil
+}
+
+type gitignoreWalker struct {
+	ps []gitignore.Pattern
+	m  gitignore.Matcher
+}
+
+type Walker interface {
+	Walk(root string, fn Func) error
+}
+
+func NewGitignoreWalker() (Walker, error) {
+	var w gitignoreWalker
+	if err := w.loadGlobalGitignore(); err != nil {
+		return nil, err
+	}
+	return &w, nil
 }
 
 // Walk walks the file tree rooted at root, calling fn for each file or
@@ -106,12 +145,12 @@ func walk(fsys fs.FS, name string, d fs.DirEntry, walkFn Func) error {
 //
 // Walk does not follow symbolic links found in directories,
 // but if root itself is a symbolic link, its target will be walked.
-func Walk(fsys fs.FS, root string, fn Func) error {
-	info, err := fs.Stat(fsys, root)
+func (w *gitignoreWalker) Walk(root string, fn Func) error {
+	info, err := os.Lstat(root)
 	if err != nil {
 		err = fn(root, nil, err)
 	} else {
-		err = walk(fsys, root, &statDirEntry{info}, fn)
+		err = w.walk(root, split(root), &statDirEntry{info}, fn)
 	}
 	if err == SkipDir {
 		return nil
@@ -127,3 +166,11 @@ func (d *statDirEntry) Name() string               { return d.info.Name() }
 func (d *statDirEntry) IsDir() bool                { return d.info.IsDir() }
 func (d *statDirEntry) Type() fs.FileMode          { return d.info.Mode().Type() }
 func (d *statDirEntry) Info() (fs.FileInfo, error) { return d.info, nil }
+
+func split(path string) []string {
+	sep := string(os.PathSeparator)
+	if path == sep {
+		return []string{}
+	}
+	return strings.Split(strings.TrimPrefix(path, sep), sep)
+}

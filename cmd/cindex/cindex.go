@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -149,9 +150,13 @@ func main() {
 	ix.LogSkip = *logSkipFlag || *verboseFlag
 	ix.Verbose = *verboseFlag
 	ix.AddPaths(args)
+	w, err := walk.NewGitignoreWalker()
+	if err != nil {
+		log.Fatal(err)
+	}
 	for _, arg := range args {
 		log.Printf("index %s", arg)
-		err := walk.Walk(os.DirFS("/"), arg, func(path string, info fs.DirEntry, err error) error {
+		err := w.Walk(arg, func(path string, info fs.DirEntry, err error) error {
 			if defaultSkip(path) {
 				if info.IsDir() {
 					return filepath.SkipDir
@@ -163,11 +168,11 @@ func main() {
 				return nil
 			}
 			// Avoid symlinks.
-			if info == nil || info.Type() != 0 {
+			if info == nil || !info.Type().IsRegular() {
 				return nil
 			}
 			err = ix.AddFile(path)
-			if os.IsPermission(err) {
+			if errors.Is(err, fs.ErrPermission) {
 				log.Printf("%s: %s", path, err)
 				return nil
 			}
