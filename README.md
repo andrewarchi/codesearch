@@ -15,6 +15,27 @@ go get github.com/andrewarchi/codesearch/cmd/...
 
 Use `go get -u` to update an existing installation.
 
-Russ Cox
-rsc@swtch.com
+Russ Cox<br>
+rsc@swtch.com<br>
 June 2015
+
+## About this fork
+
+This fork introduces a number of features and bug fixes.
+
+- Skips files excluded by local, global, and system gitignores
+- Improves usage as library:
+  - Adds `regexp.CompileFlags`
+  - Adds `(*index.Index).NumNames` ([evanj]) and `(*index.Index).Names`
+- Adds flags to `cindex`:
+  - `-index` path to the index ([taliesinb])
+  - `-nogitignore` do not skip files in .gitignore
+  - `-logskip` log skipped files
+- Adds flags to `cgrep`:
+  - `-index` path to the index ([taliesinb])
+- Adds flags to `csearch`:
+  - `-0` null delimit file names ([taliesinb])
+- Updates build scripts for current Go tools
+
+[evanj]: https://github.com/evanj/codesearch
+[taliesinb]: https://github.com/taliesinb/codesearch

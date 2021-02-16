@@ -180,6 +180,9 @@ func (ix *Index) Paths() ([]string, error) {
 
 // NameBytes returns the name corresponding to the given file ID.
 func (ix *Index) NameBytes(fileID uint32) ([]byte, error) {
+	if fileID > uint32(ix.numName) {
+		return nil, fmt.Errorf("file ID %d out of range", fileID)
+	}
 	off, err := ix.uint32(ix.nameIndex + 4*fileID)
 	if err != nil {
 		return nil, err
@@ -206,6 +209,24 @@ func (ix *Index) Name(fileID uint32) (string, error) {
 		return "", err
 	}
 	return string(name), nil
+}
+
+// Names returns all file names in the index.
+func (ix *Index) Names() ([]string, error) {
+	names := make([]string, 0, ix.numName)
+	for i := 0; i < ix.numName; i++ {
+		name, err := ix.Name(uint32(i))
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+// NumNames returns the number of file names in the index.
+func (ix *Index) NumNames() int {
+	return ix.numName
 }
 
 // listAt returns the index list entry at the given offset.
